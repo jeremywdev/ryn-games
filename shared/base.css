@@ -1,0 +1,55 @@
+/* Shared base styles for ryn-games: touch-first, no text selection, no zoom. */
+:root {
+  --bg: #fdf6e3;
+  --ink: #2b2b2b;
+  --font: "Fredoka", "Segoe UI Rounded", "Arial Rounded MT Bold", "Comic Sans MS", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button:focus { outline: none; }
+
+/* Small corner controls meant for a grown-up: house (home) and fullscreen. */
+.corner-btn {
+  position: fixed;
+  top: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  color: #555;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  text-decoration: none;
+}
+.corner-btn:active { background: rgba(0, 0, 0, 0.18); }
+.corner-btn.home { left: 10px; }
+.corner-btn.fullscreen { right: 10px; }
+:fullscreen .corner-btn.fullscreen { display: none; }

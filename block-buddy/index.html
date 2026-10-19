@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Block Buddy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/blocks.css">
+  <style>
+    :root {
+      --b: 56px;              /* block size, set by JS to fit the screen */
+      --pad-h: 26vh;          /* keypad height */
+      --num-color: #bbbbbb;
+      --num-ones: transparent;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 1fr var(--pad-h);
+      height: 100%;
+      width: 100%;
+    }
+
+    /* ---------- Stage: minus | tower | numeral | plus ---------- */
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr 1.4fr 1fr;
+      align-items: center;
+      justify-items: center;
+      padding: 8px 2vw;
+      min-height: 0;
+    }
+
+    .big-btn {
+      width: 16vmin;
+      height: 16vmin;
+      max-width: 140px;
+      max-height: 140px;
+      border-radius: 50%;
+      font-size: 10vmin;
+      font-weight: 700;
+      color: white;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      transition: transform 0.08s;
+      line-height: 1;
+    }
+    .big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+    /* Draw the + and - as bars, not font glyphs, so they sit dead center. */
+    .big-btn { position: relative; font-size: 0; }
+    .big-btn::before,
+    .big-btn.plus::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 100px;
+    }
+    .big-btn::before { width: 44%; height: 12%; }
+    .big-btn.plus::after { width: 12%; height: 44%; }
+    .big-btn.plus { background: #4aa84a; }
+    .big-btn.minus { background: #e4322b; }
+    .big-btn[disabled] { opacity: 0.3; }
+
+    .tower-wrap {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 6px;
+    }
+
+    /* The tower sits on a "floor" line. Block/face styles live in shared/blocks.css. */
+    .tower {
+      border-bottom: 6px solid rgba(0,0,0,0.12);
+      transform-origin: bottom center;
+    }
+    .tower.bounce { animation: bounce 0.35s ease-out; }
+    .tower.celebrate { animation: wiggle 0.7s ease-in-out; }
+    /* open-mouthed grin while celebrating: the smile arc fills in */
+    .tower.celebrate .mouth { height: 22%; background: var(--ink); }
+
+    /* ---------- Big numeral, glossy like the blocks ---------- */
+    .numeral {
+      font-size: 42vmin;
+      font-weight: 700;
+      line-height: 0.9;
+      /* same light-to-dark sweep as a block face, clipped to the glyphs */
+      background: linear-gradient(155deg,
+        color-mix(in srgb, var(--num-color), white 28%) 0%,
+        var(--num-color) 50%,
+        color-mix(in srgb, var(--num-color), black 16%) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      -webkit-text-stroke: 0.5vmin color-mix(in srgb, var(--num-color), black 45%);
+      filter: drop-shadow(0 0.8vmin 0.6vmin rgba(0,0,0,0.18));
+      position: relative;
+    }
+    .numeral.rainbow {
+      background: linear-gradient(180deg,#e4322b,#f5841f,#f9d71c,#4aa84a,#37b3e3,#5c3ba6,#9b4dcf);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-stroke: 0.5vmin rgba(0,0,0,0.4);
+    }
+    .numeral.bump { animation: bump 0.3s ease-out; }
+    /* teens get an underline in the ones color, echoing the ones column */
+    .numeral::after {
+      content: '';
+      position: absolute;
+      left: 10%; right: 10%; bottom: -1.5vmin;
+      height: 2vmin;
+      border-radius: 2vmin;
+      background: var(--num-ones);
+    }
+
+    /* ---------- Keypad: two rows of ten ---------- */
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: 1fr 1fr;
+      gap: 1vmin;
+      padding: 1vmin 1.5vmin 1.5vmin;
+      background: rgba(0,0,0,0.05);
+    }
+    .key {
+      min-height: 0;          /* let the grid row, not the font, set the height */
+      padding: 0;
+      line-height: 1;
+      border-radius: 2vmin;
+      font-size: 6.5vmin;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 0 rgba(0,0,0,0.35);
+      box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+      border: 0.7vmin solid transparent;
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+    .key.light { color: #333; text-shadow: 0 1px 0 rgba(255,255,255,0.6); }
+    .key:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+    .key.current {
+      transform: scale(1.08);
+      box-shadow: 0 0 0 0.8vmin #fff, 0 0 0 1.5vmin #2b2b2b, 0 6px 0 rgba(0,0,0,0.2);
+      z-index: 2;
+    }
+    .key.rainbow {
+      background: linear-gradient(135deg,#e4322b,#f5841f,#f9d71c,#4aa84a,#37b3e3,#5c3ba6,#9b4dcf);
+    }
+
+    @keyframes bounce {
+      0%   { transform: scaleY(1); }
+      40%  { transform: scaleY(0.92) scaleX(1.04); }
+      100% { transform: scaleY(1); }
+    }
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(0); }
+      20% { transform: rotate(-4deg) translateY(-6px); }
+      40% { transform: rotate(4deg) translateY(-10px); }
+      60% { transform: rotate(-3deg) translateY(-6px); }
+      80% { transform: rotate(3deg) translateY(-2px); }
+    }
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    /* Portrait fallback: stack the stage vertically. */
+    @media (orientation: portrait) {
+      .stage {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr auto;
+      }
+      .tower-wrap { grid-column: 1 / 3; grid-row: 1; }
+      .numeral { font-size: 24vmin; grid-column: 1 / 3; grid-row: 1; justify-self: end; align-self: start; }
+      .big-btn.minus { grid-row: 2; grid-column: 1; }
+      .big-btn.plus { grid-row: 2; grid-column: 2; }
+    }
+  </style>
+</head>
+<body>
+  <a class="corner-btn home" href="../index.html" aria-label="Home">&#8962;</a>
+  <button class="corner-btn fullscreen" id="fsBtn" aria-label="Fullscreen">&#x26F6;</button>
+
+  <div class="app">
+    <div class="stage">
+      <button class="big-btn minus" id="minusBtn" aria-label="Take one away"></button>
+      <div class="tower-wrap"><div class="tower" id="tower"></div></div>
+      <div class="numeral" id="numeral">0</div>
+      <button class="big-btn plus" id="plusBtn" aria-label="Add one"></button>
+    </div>
+    <div class="keypad" id="keypad"></div>
+  </div>
+
+  <script src="../shared/blocks.js"></script>
+  <script src="../shared/audio.js"></script>
+  <script>
+    (function () {
+      const MAX = 20;
+      const towerEl = document.getElementById('tower');
+      const numeralEl = document.getElementById('numeral');
+      const keypadEl = document.getElementById('keypad');
+      const plusBtn = document.getElementById('plusBtn');
+      const minusBtn = document.getElementById('minusBtn');
+      const fsBtn = document.getElementById('fsBtn');
+
+      let n = 0;
+      let stepTimer = null;
+      let runId = 0;        // bumps whenever a counting run is interrupted
+      let introPending = null; // word the browser refused to say on load, if any
+      const keys = [];
+
+      // Speak a number. If the opening word was blocked (no user gesture yet),
+      // say it first and queue this one behind it, so the count starts right.
+      function speakNumber(word, opts) {
+        if (introPending) {
+          const first = introPending;
+          introPending = null;
+          GameAudio.say(first);
+          GameAudio.say(word, Object.assign({ queue: true }, opts || {}));
+        } else {
+          GameAudio.say(word, opts);
+        }
+      }
+
+      // ---- Build keypad 1..20 ----
+      for (let i = 1; i <= MAX; i++) {
+        const k = document.createElement('button');
+        k.className = 'key';
+        k.textContent = i;
+        if (i === 7) {
+          k.classList.add('rainbow');
+        } else if (i > 10) {
+          // Teens: white like the ten, with a border in the ones color.
+          k.style.background = Blocks.numberColor(10);
+          k.style.borderColor = i === 20 ? '#8c8c8c' : Blocks.numberColor(i - 10);
+          k.classList.add('light');
+        } else {
+          k.style.background = Blocks.numberColor(i);
+          if (Blocks.isLight(Blocks.numberColor(i))) k.classList.add('light');
+        }
+        k.addEventListener('click', () => { GameAudio.unlock(); goTo(i); });
+        keypadEl.appendChild(k);
+        keys[i] = k;
+      }
+
+      // ---- Sizing: fit ten blocks plus headroom in the stage ----
+      function fit() {
+        const wrap = towerEl.parentElement;
+        const h = wrap.clientHeight;
+        const w = wrap.clientWidth;
+        // Two columns plus gap and padding is about 3 block widths.
+        const b = Math.max(18, Math.min(h / 11.6, w / 3.2, 110));
+        document.documentElement.style.setProperty('--b', b + 'px');
+      }
+      window.addEventListener('resize', fit);
+
+      // ---- Rendering ----
+      function restartAnim(el, cls) {
+        el.classList.remove(cls);
+        void el.offsetWidth; // force reflow so the animation replays
+        el.classList.add(cls);
+      }
+
+      function show(value, opts) {
+        opts = opts || {};
+        n = Math.max(0, Math.min(MAX, value));
+        Blocks.render(towerEl, n, { pop: opts.pop ? n - 1 : -1 });
+        restartAnim(towerEl, 'bounce');
+
+        numeralEl.textContent = n;
+        numeralEl.classList.toggle('rainbow', n === 7);
+        document.documentElement.style.setProperty('--num-color', Blocks.numberColor(n));
+        document.documentElement.style.setProperty('--num-ones', Blocks.onesColor(n) || 'transparent');
+        restartAnim(numeralEl, 'bump');
+
+        keys.forEach(k => k && k.classList.remove('current'));
+        if (keys[n]) keys[n].classList.add('current');
+
+        plusBtn.disabled = n >= MAX;
+        minusBtn.disabled = n <= 0;
+      }
+
+      // ---- Single steps ----
+      function stopStepping() {
+        runId++;
+        if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+      }
+
+      function addOne() {
+        stopStepping();
+        if (n >= MAX) return;
+        show(n + 1, { pop: true });
+        GameAudio.pop(n);
+        speakNumber(Blocks.WORDS[n]);
+      }
+
+      function takeOne() {
+        stopStepping();
+        if (n <= 0) return;
+        show(n - 1);
+        GameAudio.unpop(n);
+        speakNumber(Blocks.WORDS[n]);
+      }
+
+      // ---- Keypad: count up or down to the target, one block at a time ----
+      // Each step waits for the spoken word to finish, then pauses briefly,
+      // so no number ever gets cut off mid-word.
+      function goTo(target) {
+        stopStepping();
+        if (target === n) { celebrate(target); return; }
+        const dir = target > n ? 1 : -1;
+        const run = runId;
+        const pause = 160;
+
+        function tick() {
+          if (run !== runId) return;
+          show(n + dir, { pop: dir > 0 });
+          if (dir > 0) GameAudio.pop(n); else GameAudio.unpop(n);
+          if (n === target) {
+            celebrate(target);
+            stepTimer = null;
+            return;
+          }
+          speakNumber(Blocks.WORDS[n], {
+            onEnd: () => {
+              if (run !== runId) return;
+              stepTimer = setTimeout(tick, pause);
+            }
+          });
+        }
+        tick();
+      }
+
+      function celebrate(target) {
+        restartAnim(towerEl, 'celebrate');
+        GameAudio.chime();
+        speakNumber(Blocks.phrase(target));
+      }
+
+      // ---- Wire up ----
+      plusBtn.addEventListener('click', () => { GameAudio.unlock(); addOne(); });
+      minusBtn.addEventListener('click', () => { GameAudio.unlock(); takeOne(); });
+
+      fsBtn.addEventListener('click', () => {
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      });
+
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('touchstart', () => GameAudio.unlock(), { once: true, passive: true });
+
+      fit();
+      // Dev convenience: open block-buddy/?n=14 to start on a given number.
+      const startAt = parseInt(new URLSearchParams(location.search).get('n'), 10);
+      show(Number.isFinite(startAt) ? startAt : 1);
+
+      // Greet with the starting number as soon as a voice is available.
+      // If the browser refuses to speak before a tap, remember the word
+      // and let the first tap say it (see speakNumber).
+      const introWord = Blocks.WORDS[n];
+      GameAudio.ready(() => {
+        GameAudio.unlock();
+        GameAudio.say(introWord, {
+          onError: (code) => { if (code === 'not-allowed') introPending = introWord; }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
