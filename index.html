@@ -59,8 +59,24 @@
     }
     .tile .label { line-height: 1; }
 
-    /* A tiny static tower as the Block Buddy icon. */
+    /* Block Buddy icon: a tiny tower. */
     .tile .tower { --b: 6vmin; }
+
+    /* Find Me icon: three numeral chips, one found. */
+    .chips { display: flex; gap: 1.6vmin; align-items: center; }
+    .chip {
+      width: 8.5vmin;
+      height: 8.5vmin;
+      border-radius: 1.6vmin;
+      color: white;
+      font-size: 5.5vmin;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-shadow: 0 2px 0 rgba(0,0,0,0.3);
+      box-shadow: 0 0.6vmin 0 rgba(0,0,0,0.18);
+    }
+    .chip.found { transform: scale(1.15); box-shadow: 0 0 0 0.6vmin #fff, 0 0 0 1.2vmin #2b2b2b; }
 
     .tile.soon {
       opacity: 0.35;
@@ -70,10 +86,63 @@
       box-shadow: none;
       justify-content: flex-end;
     }
+
+    /* ---------- Parent view (long-press the title) ---------- */
+    .parent {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3vmin;
+      padding: 4vmin;
+      z-index: 30;
+      font-size: 2.6vmin;
+      color: #444;
+    }
+    .parent.show { display: flex; }
+    .parent h2 { margin: 0; font-size: 4vmin; }
+    .parent .sub { color: #777; margin: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 1vmin;
+    }
+    .cell {
+      width: 8vmin;
+      height: 8vmin;
+      border-radius: 1.5vmin;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #e9e4d5;
+      line-height: 1.1;
+    }
+    .cell b { font-size: 3vmin; }
+    .cell small { font-size: 1.8vmin; opacity: 0.75; }
+    .cell.good { background: #bfe5bf; }
+    .cell.okay { background: #f8ecb0; }
+    .cell.weak { background: #f6c3bf; }
+    .cell.mastered { outline: 0.5vmin solid #4aa84a; }
+    .parent .row { display: flex; gap: 3vmin; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .parent button {
+      font-size: 2.6vmin;
+      padding: 1.6vmin 3vmin;
+      border-radius: 2vmin;
+      background: #ddd;
+      color: #333;
+    }
+    .parent button.danger { background: #e4322b; color: white; }
+    .legend { display: flex; gap: 2vmin; color: #777; }
+    .legend span::before { content: ''; display: inline-block; width: 1.8vmin; height: 1.8vmin; border-radius: 0.4vmin; margin-right: 0.6vmin; vertical-align: middle; }
+    .legend .g::before { background: #bfe5bf; } .legend .o::before { background: #f8ecb0; } .legend .w::before { background: #f6c3bf; }
   </style>
 </head>
 <body>
-  <h1>Ryn's Games</h1>
+  <h1 id="title">Ryn's Games</h1>
   <div class="tiles">
     <a class="tile" href="block-buddy/index.html">
       <div class="picture">
@@ -94,8 +163,76 @@
       </div>
       <div class="label">Block Buddy</div>
     </a>
+    <a class="tile" href="find-me/index.html">
+      <div class="picture">
+        <div class="chips">
+          <div class="chip" style="background:#f5841f">2</div>
+          <div class="chip found" style="background:#37b3e3">5</div>
+          <div class="chip" style="background:#d63d8a">8</div>
+        </div>
+      </div>
+      <div class="label">Find Me</div>
+    </a>
     <div class="tile soon"><div class="label">coming soon</div></div>
   </div>
-  <script>document.addEventListener('contextmenu', e => e.preventDefault());</script>
+
+  <div class="parent" id="parent">
+    <h2>Grown-up corner</h2>
+    <p class="sub" id="rangeLine"></p>
+    <div class="grid" id="grid"></div>
+    <div class="legend"><span class="g">mostly right</span><span class="o">mixed</span><span class="w">struggling</span><span>green ring = mastered</span></div>
+    <div class="row">
+      <button id="closeBtn">Close</button>
+      <button id="resetBtn" class="danger">Reset progress</button>
+    </div>
+  </div>
+
+  <script src="shared/progress.js"></script>
+  <script>
+    (function () {
+      document.addEventListener('contextmenu', e => e.preventDefault());
+
+      const parentEl = document.getElementById('parent');
+      const grid = document.getElementById('grid');
+      const rangeLine = document.getElementById('rangeLine');
+      const resetBtn = document.getElementById('resetBtn');
+      let armed = false;
+
+      function renderParent() {
+        grid.innerHTML = '';
+        Progress.all().forEach(s => {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          if (s.seen > 0) {
+            const rate = s.hits / s.seen;
+            cell.classList.add(rate >= 0.8 ? 'good' : rate >= 0.5 ? 'okay' : 'weak');
+          }
+          if (s.mastered) cell.classList.add('mastered');
+          cell.innerHTML = '<b>' + s.n + '</b><small>' + (s.seen ? s.hits + '/' + s.seen : '–') + '</small>';
+          grid.appendChild(cell);
+        });
+        rangeLine.textContent = 'Find Me is asking about 1 to ' + Progress.range() + '. Counts are right answers / times asked.';
+        resetBtn.textContent = 'Reset progress';
+        armed = false;
+      }
+
+      // Long-press the title (700ms) to open. A quick tap does nothing.
+      const title = document.getElementById('title');
+      let timer = null;
+      const start = () => { timer = setTimeout(() => { renderParent(); parentEl.classList.add('show'); }, 700); };
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      title.addEventListener('pointerdown', start);
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => title.addEventListener(ev, cancel));
+
+      document.getElementById('closeBtn').addEventListener('click', () => parentEl.classList.remove('show'));
+      // Dev convenience: index.html?parent=1 opens the grown-up corner directly.
+      if (new URLSearchParams(location.search).get('parent')) { renderParent(); parentEl.classList.add('show'); }
+      resetBtn.addEventListener('click', () => {
+        if (!armed) { armed = true; resetBtn.textContent = 'Tap again to confirm'; return; }
+        Progress.reset();
+        renderParent();
+      });
+    })();
+  </script>
 </body>
 </html>
