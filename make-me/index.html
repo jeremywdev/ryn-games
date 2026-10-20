@@ -115,7 +115,7 @@
       line-height: 1;
       color: var(--c);
     }
-    .choice.light .label { color: #555; }
+    .choice.light .label { -webkit-text-stroke: 0.3vmin rgba(0,0,0,0.5); } /* yellow stays yellow, just outlined */
     .choice.wrong { animation: shake 0.45s ease-in-out; }
     .choice.nudge { animation: nudge 0.9s ease-in-out infinite; }
     .choice.gone { opacity: 0.3; pointer-events: none; }
@@ -262,6 +262,7 @@
       let level = 1;
       let target = 0;
       let start = 0;          // blocks already in place when the round begins (levels 3 and 4)
+      let lastKey = 0;        // last target (or start, on level 3) so a new bag never repeats it
       let parts = [];         // parts she has added, in order
       let sum = 0;
       let choices = [];
@@ -280,24 +281,28 @@
       function planRound() {
         level = Number.isFinite(forcedLevel) ? forcedLevel : Progress.getLevel(GAME);
         level = Math.max(1, Math.min(MAX_LEVEL, level));
+        // Targets (or starts) come from a shuffled bag so each one appears
+        // before any repeats, instead of 5, 5, 5 by bad luck.
+        const even = () => 1;
         let pool;
         if (level === 1) {
-          target = 2 + Math.floor(Math.random() * 4);
+          target = Progress.pickTarget(range(2, 5), lastKey, even);
           start = 0;
           pool = range(1, target - 1);
         } else if (level === 2) {
-          target = 6 + Math.floor(Math.random() * 5);
+          target = Progress.pickTarget(range(6, 10), lastKey, even);
           start = 0;
           pool = [1].concat(shuffle(range(2, target - 1)).slice(0, 4));
         } else if (level === 3) {
           target = 10;
-          start = 2 + Math.floor(Math.random() * 7);
+          start = Progress.pickTarget(range(2, 8), lastKey, even);
           pool = uniq([1, target - start].concat(shuffle(range(2, 6)))).slice(0, 5);
         } else {
-          target = 11 + Math.floor(Math.random() * 9);
+          target = Progress.pickTarget(range(11, 19), lastKey, even);
           start = 10;
           pool = uniq([1, target - start].concat(shuffle(range(2, 9)))).slice(0, 4);
         }
+        lastKey = level === 3 ? start : target;
         choices = pool.sort((a, b) => a - b);
       }
 

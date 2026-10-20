@@ -173,18 +173,28 @@
     return Math.max(0.3, w);
   }
 
-  /** Pick a target from pool (array of numbers), weighted, avoiding `avoid`. */
-  function pickTarget(pool, avoid) {
-    const candidates = pool.filter(n => n !== avoid);
-    const list = candidates.length ? candidates : pool;
-    const weights = list.map(weight);
-    const total = weights.reduce((a, b) => a + b, 0);
-    let r = Math.random() * total;
-    for (let i = 0; i < list.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return list[i];
+  /**
+   * Pick a target from pool (array of numbers) without feeling random:
+   * every number in the pool comes up once before any repeats. Within a pass
+   * the order is a weighted shuffle, so weak or unseen numbers tend to come
+   * first. Bags live in memory per pool; `weightFn` defaults to weight().
+   */
+  const bags = {};
+  function pickTarget(pool, avoid, weightFn) {
+    const key = pool.join(',');
+    let bag = bags[key];
+    if (!bag || !bag.length) {
+      const wf = weightFn || weight;
+      // Efraimidis-Spirakis: sort by a random key scaled by weight = weighted sampling without replacement.
+      bag = pool
+        .map(n => ({ n, k: -Math.log(Math.random()) / Math.max(0.01, wf(n)) }))
+        .sort((a, b) => a.k - b.k)
+        .map(x => x.n);
+      // never start a new pass with the number that just ended the last one
+      if (bag.length > 1 && bag[0] === avoid) [bag[0], bag[1]] = [bag[1], bag[0]];
+      bags[key] = bag;
     }
-    return list[list.length - 1];
+    return bag.shift();
   }
 
   // ---- Per-game levels (Make Me and later games) ----
