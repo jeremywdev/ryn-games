@@ -22,7 +22,7 @@
   const MAX = 20;
 
   function blank() {
-    return { numbers: {}, pairs: {}, band: 5, pendingUnlock: 0, updatedAt: 0 };
+    return { numbers: {}, pairs: {}, band: 5, pendingUnlock: 0, levels: {}, updatedAt: 0 };
   }
 
   function normalize(d) {
@@ -30,6 +30,7 @@
     if (!d.pairs) d.pairs = {};
     if (!d.band) d.band = 5;
     if (!d.pendingUnlock) d.pendingUnlock = 0;
+    if (!d.levels) d.levels = {};
     return d;
   }
 
@@ -186,6 +187,51 @@
     return list[list.length - 1];
   }
 
+  // ---- Per-game levels (Make Me and later games) ----
+  function levelEntry(game) {
+    return data.levels[game] || (data.levels[game] = { level: 1, clean: 0, pendingUp: 0 });
+  }
+
+  /** Current level for a game, 1-based. */
+  function getLevel(game) { return levelEntry(game).level; }
+
+  /** A grown-up sets a level directly; clean-round progress restarts. */
+  function setLevel(game, level) {
+    const e = levelEntry(game);
+    e.level = Math.max(1, level | 0);
+    e.clean = 0;
+    e.pendingUp = 0;
+    save();
+  }
+
+  /**
+   * Record a round. A clean round (no mistakes) counts toward the next level;
+   * `needed` clean rounds advance it, up to `maxLevel`. Returns the new level
+   * when it just advanced, else 0.
+   */
+  function recordLevelRound(game, clean, needed, maxLevel) {
+    const e = levelEntry(game);
+    if (!clean) { save(); return 0; }
+    e.clean++;
+    if (e.clean >= needed && e.level < maxLevel) {
+      e.level++;
+      e.clean = 0;
+      e.pendingUp = e.level;
+      save();
+      return e.level;
+    }
+    save();
+    return 0;
+  }
+
+  /** The level reached since the last call, or 0. Lets a game celebrate once. */
+  function takeLevelUp(game) {
+    const e = levelEntry(game);
+    const u = e.pendingUp || 0;
+    if (u) { e.pendingUp = 0; save(); }
+    return u;
+  }
+
   /** Everything, for the parent view. */
   function all() {
     const out = [];
@@ -217,6 +263,7 @@
 
   window.Progress = {
     get, record, recordConfusion, confusedWith, mastered, range, setBand, takeUnlock,
+    getLevel, setLevel, recordLevelRound, takeLevelUp,
     weight, pickTarget, all, reset, canUndoReset, undoReset, MAX
   };
 })();

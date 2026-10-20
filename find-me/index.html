@@ -246,6 +246,21 @@
       let found = [];
       let promptId = 0;           // so a stale prompt's end cannot clear a newer prompt's pulse
       const CHEERS = ['Yes!', 'Hooray!', 'You found it!', "That's it!", 'Wow!', 'Super!'];
+      const IDLE_MS = 10000;
+      let idleTimer = null;
+      let idleRepeats = 0;
+
+      // If nothing happens for a while, say the prompt again (a few times at most).
+      function armIdle() {
+        clearTimeout(idleTimer);
+        if (locked) return;
+        idleTimer = setTimeout(() => {
+          if (locked || idleRepeats >= 3) return;
+          idleRepeats++;
+          if (idleRepeats >= 2) showHint();
+          prompt();
+        }, IDLE_MS);
+      }
 
       // ---- Speech ----
       function promptText() { return 'Find ' + Blocks.WORDS[target] + '.'; }
@@ -257,6 +272,7 @@
         GameAudio.say((prefix || '') + promptText(), {
           onEnd: () => { if (id === promptId) replayBtn.classList.remove('pulse'); }
         });
+        armIdle();
       }
 
       // ---- Round setup ----
@@ -311,6 +327,7 @@
         locked = false;
         wrongTaps = 0;
         replayTaps = 0;
+        idleRepeats = 0;
         confusedThisRound = new Set();
         hideHint();
 
@@ -352,6 +369,7 @@
       // ---- Answers ----
       function onTap(tile, n) {
         if (locked) return;
+        clearTimeout(idleTimer);
         if (n === target) {
           locked = true;
           promptId++;
@@ -423,6 +441,7 @@
 
       function endSet() {
         locked = true;
+        clearTimeout(idleTimer);
         const unlocked = Progress.takeUnlock();
         const newOnes = [];
         if (unlocked) for (let i = unlocked === 20 ? 11 : 6; i <= unlocked; i++) newOnes.push(i);

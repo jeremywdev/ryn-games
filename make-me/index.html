@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Make Me</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/blocks.css">
+  <style>
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 2vmin 3vmin 3vmin;
+      min-height: 0;
+    }
+
+    /* ---------- Stage: replay | target numeral | the stack being built ---------- */
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.4fr 1fr;
+      align-items: center;
+      justify-items: center;
+      min-height: 0;
+    }
+    .replay {
+      width: 16vmin;
+      height: 16vmin;
+      border-radius: 50%;
+      background: #f5841f;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.08s;
+    }
+    .replay:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+    .replay svg { width: 55%; height: 55%; fill: white; }
+    .replay.pulse { animation: pulse 1.2s ease-in-out infinite; }
+
+    .target {
+      font-size: 34vmin;
+      font-weight: 700;
+      line-height: 0.9;
+      color: var(--t-color, #bbb);
+      -webkit-text-stroke: 0.5vmin rgba(0,0,0,0.4);
+      filter: drop-shadow(0 0.8vmin 0.6vmin rgba(0,0,0,0.18));
+      position: relative;
+    }
+    .target::after {
+      content: '';
+      position: absolute;
+      left: 10%; right: 10%; bottom: -1.5vmin;
+      height: 2vmin;
+      border-radius: 2vmin;
+      background: var(--t-ones, transparent);
+    }
+    .target.bump { animation: bump 0.3s ease-out; }
+
+    .stack-wrap {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 1vmin;
+    }
+    .stack {
+      border-bottom: 6px solid rgba(0,0,0,0.12);
+      transform-origin: bottom center;
+    }
+    .stack.bounce { animation: bounce 0.35s ease-out; }
+    .stack.celebrate { animation: wiggle 0.7s ease-in-out; }
+    .stack.celebrate .mouth { height: 22%; background: var(--ink); }
+    /* the part of the number still missing */
+    .stack .block.ghost {
+      border: 3px dashed rgba(0,0,0,0.2);
+      background: rgba(255,255,255,0.35);
+      box-shadow: none;
+    }
+    .stack .block.ghost::before { display: none; }
+    .stack .block.ghost.next { border-color: rgba(0,0,0,0.45); animation: pulse 1.2s ease-in-out infinite; }
+
+    /* ---------- Choices: little towers to add ---------- */
+    .choices {
+      display: flex;
+      gap: 2.5vmin;
+      justify-content: center;
+      align-items: flex-end;
+      padding: 1.5vmin 0 0;
+    }
+    .choice {
+      --c: #999;
+      width: 17vmin;
+      height: 28vmin;
+      border-radius: 3.5vmin;
+      background: white;
+      border: 0.9vmin solid var(--c);
+      box-shadow: 0 0.9vmin 0 rgba(0,0,0,0.16), 0 1vmin 2vmin rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 1vmin;
+      gap: 1vmin;
+      transition: transform 0.12s, opacity 0.4s, box-shadow 0.12s;
+    }
+    .choice:active { transform: translateY(0.6vmin); box-shadow: 0 0.3vmin 0 rgba(0,0,0,0.16); }
+    .choice .tower { --b: 3.1vmin; }
+    .choice .label {
+      font-size: 6.5vmin;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--c);
+    }
+    .choice.light .label { color: #555; }
+    .choice.wrong { animation: shake 0.45s ease-in-out; }
+    .choice.nudge { animation: nudge 0.9s ease-in-out infinite; }
+    .choice.gone { opacity: 0.3; pointer-events: none; }
+    .choices.locked .choice { pointer-events: none; }
+
+    /* ---------- Start / end-of-set overlay ---------- */
+    .party {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6vmin;
+      z-index: 20;
+    }
+    .party.show { display: flex; }
+    .party .lineup {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5vmin;
+      border-bottom: 6px solid rgba(0,0,0,0.12);
+      padding: 0 4vmin;
+      max-width: 94vw;
+    }
+    .party .lineup .tower { animation: hop 0.9s ease-in-out infinite; transform-origin: bottom center; }
+    .play {
+      width: 22vmin;
+      height: 22vmin;
+      border-radius: 50%;
+      background: #4aa84a;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .play::after {
+      content: '';
+      position: absolute;
+      left: 56%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-left: 9vmin solid white;
+      border-top: 6vmin solid transparent;
+      border-bottom: 6vmin solid transparent;
+    }
+    .play:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-2vmin) rotate(-3deg); }
+      40% { transform: translateX(2vmin) rotate(3deg); }
+      60% { transform: translateX(-1.5vmin) rotate(-2deg); }
+      80% { transform: translateX(1.5vmin) rotate(2deg); }
+    }
+    @keyframes nudge {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-1.5vmin) scale(1.04); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    @keyframes bounce {
+      0%   { transform: scaleY(1); }
+      40%  { transform: scaleY(0.92) scaleX(1.04); }
+      100% { transform: scaleY(1); }
+    }
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(0); }
+      20% { transform: rotate(-4deg) translateY(-6px); }
+      40% { transform: rotate(4deg) translateY(-10px); }
+      60% { transform: rotate(-3deg) translateY(-6px); }
+      80% { transform: rotate(3deg) translateY(-2px); }
+    }
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+    @keyframes hop {
+      0%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-2vmin) scaleY(1.05); }
+      50% { transform: translateY(0) scaleY(0.95); }
+    }
+
+    @media (orientation: portrait) {
+      .stage { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
+      .stack-wrap { grid-column: 1 / 3; grid-row: 2; }
+      .target { font-size: 22vmin; }
+      .choices { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <a class="corner-btn home" href="../index.html" aria-label="Home">&#8962;</a>
+  <button class="corner-btn fullscreen" id="fsBtn" aria-label="Fullscreen">&#x26F6;</button>
+
+  <div class="app">
+    <div class="stage">
+      <button class="replay" id="replayBtn" aria-label="Say it again">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
+        </svg>
+      </button>
+      <div class="target" id="target">5</div>
+      <div class="stack-wrap"><div class="tower stack" id="stack"></div></div>
+      <div></div>
+    </div>
+    <div class="choices" id="choices"></div>
+  </div>
+
+  <div class="party" id="party">
+    <div class="lineup" id="lineup"></div>
+    <button class="play" id="playBtn" aria-label="Play"></button>
+  </div>
+
+  <script src="../shared/blocks.js"></script>
+  <script src="../shared/audio.js"></script>
+  <script src="../shared/progress.js"></script>
+  <script src="../shared/tap.js"></script>
+  <script src="../shared/fx.js"></script>
+  <script>
+    (function () {
+      const GAME = 'make-me';
+      const MAX_LEVEL = 4;
+      const CLEAN_ROUNDS_TO_ADVANCE = 5;
+      const ROUNDS_PER_SET = 5;
+      const IDLE_MS = 10000;
+      const CHEERS = ['Yes!', 'Hooray!', 'You made it!', "That's it!", 'Wow!', 'Super!'];
+
+      const stackEl = document.getElementById('stack');
+      const targetEl = document.getElementById('target');
+      const choicesEl = document.getElementById('choices');
+      const replayBtn = document.getElementById('replayBtn');
+      const partyEl = document.getElementById('party');
+      const lineupEl = document.getElementById('lineup');
+      const playBtn = document.getElementById('playBtn');
+      const fsBtn = document.getElementById('fsBtn');
+      const params = new URLSearchParams(location.search);
+      // Dev conveniences: ?level=3 forces a level; ?demo=mid|done|party freezes a state for screenshots.
+      const demo = params.get('demo');
+      const forcedLevel = parseInt(params.get('level'), 10);
+
+      let level = 1;
+      let target = 0;
+      let start = 0;          // blocks already in place when the round begins (levels 3 and 4)
+      let parts = [];         // parts she has added, in order
+      let sum = 0;
+      let choices = [];
+      let locked = true;
+      let overshoots = 0;
+      let roundsDone = 0;
+      let made = [];
+      let promptId = 0;
+      let idleTimer = null;
+      let idleRepeats = 0;
+      let runId = 0;
+
+      // ---- Levels ----
+      // 1: make 2-5 from parts      2: make 6-10 from parts
+      // 3: start at n, make ten     4: start at ten, make a teen
+      function planRound() {
+        level = Number.isFinite(forcedLevel) ? forcedLevel : Progress.getLevel(GAME);
+        level = Math.max(1, Math.min(MAX_LEVEL, level));
+        let pool;
+        if (level === 1) {
+          target = 2 + Math.floor(Math.random() * 4);
+          start = 0;
+          pool = range(1, target - 1);
+        } else if (level === 2) {
+          target = 6 + Math.floor(Math.random() * 5);
+          start = 0;
+          pool = [1].concat(shuffle(range(2, target - 1)).slice(0, 4));
+        } else if (level === 3) {
+          target = 10;
+          start = 2 + Math.floor(Math.random() * 7);
+          pool = uniq([1, target - start].concat(shuffle(range(2, 6)))).slice(0, 5);
+        } else {
+          target = 11 + Math.floor(Math.random() * 9);
+          start = 10;
+          pool = uniq([1, target - start].concat(shuffle(range(2, 9)))).slice(0, 4);
+        }
+        choices = pool.sort((a, b) => a - b);
+      }
+
+      function range(a, b) { const r = []; for (let i = a; i <= b; i++) r.push(i); return r; }
+      function uniq(a) { return a.filter((x, i) => a.indexOf(x) === i); }
+      function shuffle(a) {
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      // ---- Speech ----
+      function promptText() {
+        if (start === 10) return 'Ten! Make ' + Blocks.WORDS[target] + '.';
+        if (start > 0) return Blocks.WORDS[start] + '. Make ' + Blocks.WORDS[target] + '!';
+        return 'Make ' + Blocks.WORDS[target] + '!';
+      }
+
+      function prompt(prefix) {
+        const id = ++promptId;
+        replayBtn.classList.add('pulse');
+        GameAudio.say((prefix || '') + promptText(), {
+          onEnd: () => { if (id === promptId) replayBtn.classList.remove('pulse'); }
+        });
+        armIdle();
+      }
+
+      function sumSentence() {
+        const list = (start ? [start] : []).concat(parts).map(n => Blocks.WORDS[n]);
+        const joined = list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0];
+        return joined + ' make ' + Blocks.WORDS[target] + '!';
+      }
+
+      // ---- Idle nudge: repeat the prompt if nothing happens for a while ----
+      function armIdle() {
+        clearTimeout(idleTimer);
+        if (locked) return;
+        idleTimer = setTimeout(() => {
+          if (locked || idleRepeats >= 3) return;
+          idleRepeats++;
+          prompt();
+        }, IDLE_MS);
+      }
+
+      // ---- Rendering ----
+      function restartAnim(el, cls) {
+        el.classList.remove(cls);
+        void el.offsetWidth;
+        el.classList.add(cls);
+      }
+
+      function fitStack() {
+        const wrap = stackEl.parentElement;
+        const rows = Math.min(target, 10);
+        const b = Math.max(16, Math.min(wrap.clientHeight / (rows + 2), wrap.clientWidth / 3.4, 90));
+        stackEl.style.setProperty('--b', b + 'px');
+      }
+
+      /**
+       * Draw the stack: the start blocks (white ten or a plain number), each
+       * added part in its own colour, `extra` blocks of a part being added,
+       * and dashed ghosts for what is still missing. Face on the top real block.
+       */
+      function renderStack(extraPart, extraCount) {
+        const colors = [];
+        for (let r = 0; r < start; r++) colors.push(Blocks.blockColor(start, r));
+        parts.forEach(p => { for (let r = 0; r < p; r++) colors.push(Blocks.blockColor(p, r)); });
+        if (extraPart) for (let r = 0; r < extraCount; r++) colors.push(Blocks.blockColor(extraPart, r));
+        const real = colors.length;
+
+        stackEl.innerHTML = '';
+        stackEl.classList.toggle('teen', target > 10 && target < 20);
+        const cols = Blocks.columns(target);
+        let idx = 0;
+        cols.forEach(count => {
+          const col = document.createElement('div');
+          col.className = 'col';
+          for (let row = 0; row < count; row++) {
+            const block = document.createElement('div');
+            block.className = 'block';
+            if (idx < real) {
+              block.style.setProperty('--c', colors[idx]);
+              if (Blocks.isLight(colors[idx])) block.classList.add('light');
+              if (extraPart && idx === real - 1) block.classList.add('pop');
+              if (idx === real - 1) block.appendChild(makeFace());
+            } else {
+              block.classList.add('ghost');
+              if (idx === real) block.classList.add('next');
+            }
+            col.appendChild(block);
+            idx++;
+          }
+          stackEl.appendChild(col);
+        });
+        restartAnim(stackEl, 'bounce');
+      }
+
+      function makeFace() {
+        const face = document.createElement('div');
+        face.className = 'face';
+        face.innerHTML =
+          '<div class="eye left"><div class="pupil"></div></div>' +
+          '<div class="eye right"><div class="pupil"></div></div>' +
+          '<div class="mouth"></div>';
+        return face;
+      }
+
+      function renderTarget() {
+        targetEl.textContent = target;
+        targetEl.style.setProperty('--t-color', Blocks.numberColor(target));
+        targetEl.style.setProperty('--t-ones', Blocks.onesColor(target) || 'transparent');
+        restartAnim(targetEl, 'bump');
+      }
+
+      function renderChoices() {
+        choicesEl.innerHTML = '';
+        choicesEl.classList.remove('locked');
+        choices.forEach(n => {
+          const c = Blocks.numberColor(n);
+          const btn = document.createElement('button');
+          btn.className = 'choice' + (Blocks.isLight(c) ? ' light' : '');
+          btn.style.setProperty('--c', c);
+          btn.dataset.n = n;
+          const tower = document.createElement('div');
+          tower.className = 'tower';
+          // taller parts get smaller blocks so every tower fits its card
+          tower.style.setProperty('--b', Math.min(3.1, 18 / (n + 0.6)) + 'vmin');
+          Blocks.render(tower, n);
+          const label = document.createElement('div');
+          label.className = 'label';
+          label.textContent = n;
+          btn.appendChild(tower);
+          btn.appendChild(label);
+          Tap.on(btn, () => { GameAudio.unlock(); onChoice(btn, n); });
+          choicesEl.appendChild(btn);
+        });
+      }
+
+      // ---- Round flow ----
+      function newRound(prefix) {
+        runId++;
+        planRound();
+        parts = [];
+        sum = start;
+        overshoots = 0;
+        idleRepeats = 0;
+        locked = false;
+        renderTarget();
+        fitStack();
+        renderStack();
+        renderChoices();
+        prompt(prefix);
+      }
+
+      function onChoice(btn, n) {
+        if (locked) return;
+        clearTimeout(idleTimer);
+
+        if (sum + n > target) {
+          // Too many: shake, explain, and after two misses point at a part that fits.
+          overshoots++;
+          restartAnim(btn, 'wrong');
+          GameAudio.nope();
+          if (overshoots >= 2) {
+            const fits = choices.filter(c => sum + c <= target);
+            const best = fits.find(c => sum + c === target) || fits[fits.length - 1];
+            choicesEl.querySelectorAll('.choice').forEach(x => {
+              x.classList.toggle('nudge', Number(x.dataset.n) === best);
+              x.classList.toggle('gone', sum + Number(x.dataset.n) > target);
+            });
+          }
+          prompt('Oops, too many! Try a smaller one. ');
+          return;
+        }
+
+        // Add the part one block at a time, counting on aloud.
+        locked = true;
+        choicesEl.classList.add('locked');
+        choicesEl.querySelectorAll('.choice').forEach(x => x.classList.remove('nudge'));
+        const run = ++runId;
+        const from = sum;
+        let shown = 0;
+
+        function step() {
+          if (run !== runId) return;
+          shown++;
+          renderStack(n, shown);
+          GameAudio.pop(from + shown);
+          const word = Blocks.WORDS[from + shown];
+          const last = shown === n;
+          GameAudio.say(word, {
+            onDone: () => {
+              if (run !== runId) return;
+              if (!last) { setTimeout(step, 120); return; }
+              parts.push(n);
+              sum = from + n;
+              renderStack();
+              if (sum === target) finishRound();
+              else {
+                locked = false;
+                choicesEl.classList.remove('locked');
+                choicesEl.querySelectorAll('.choice').forEach(x => x.classList.toggle('gone', sum + Number(x.dataset.n) > target));
+                setTimeout(() => { if (run === runId && !locked) prompt(); }, 500);
+              }
+            }
+          });
+        }
+        step();
+      }
+
+      function finishRound() {
+        locked = true;
+        promptId++;
+        replayBtn.classList.remove('pulse');
+        clearTimeout(idleTimer);
+        made.push(target);
+        const clean = overshoots === 0;
+        Progress.recordLevelRound(GAME, clean, CLEAN_ROUNDS_TO_ADVANCE, MAX_LEVEL);
+
+        // The parts become the whole number: re-render in its own colour with a grin.
+        Blocks.render(stackEl, target);
+        restartAnim(stackEl, 'celebrate');
+        setTimeout(() => stackEl.classList.remove('celebrate'), 800);
+        GameAudio.chime();
+        const r = stackEl.getBoundingClientRect();
+        FX.burstFrom(stackEl, { spread: Math.max(180, r.height * 0.6) });
+        const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+        GameAudio.say(cheer + ' ' + sumSentence(), { onDone: () => setTimeout(nextRound, 800) });
+      }
+
+      function nextRound() {
+        if (demo) return;
+        roundsDone++;
+        if (roundsDone >= ROUNDS_PER_SET) { endSet(); return; }
+        newRound();
+      }
+
+      // ---- Start / end of set ----
+      function lineup(numbers) {
+        lineupEl.innerHTML = '';
+        const cols = numbers.reduce((a, n) => a + Blocks.columns(n).length, 0);
+        const b = Math.max(1.5, Math.min(3.2, 70 / (Math.max(cols, 1) * 1.45)));
+        numbers.forEach((n, i) => {
+          const t = document.createElement('div');
+          t.className = 'tower';
+          t.style.setProperty('--b', b + 'vmin');
+          t.style.animationDelay = (i * 0.12) + 's';
+          Blocks.render(t, n);
+          lineupEl.appendChild(t);
+        });
+      }
+
+      function endSet() {
+        locked = true;
+        const up = Progress.takeLevelUp(GAME);
+        lineup(made);
+        partyEl.classList.add('show');
+        GameAudio.chime();
+        setTimeout(() => GameAudio.chime(), 350);
+        const cx = window.innerWidth / 2, cy = window.innerHeight * 0.38;
+        FX.burst(cx - window.innerWidth * 0.18, cy, { count: 40, spread: 320 });
+        setTimeout(() => FX.burst(cx + window.innerWidth * 0.18, cy, { count: 40, spread: 320 }), 300);
+        setTimeout(() => FX.burst(cx, cy - 40, { count: 50, spread: 400 }), 700);
+        GameAudio.say(up
+          ? 'You made them all! Now some bigger numbers want to be made!'
+          : 'You made them all!');
+      }
+
+      function startSet(prefix) {
+        partyEl.classList.remove('show');
+        roundsDone = 0;
+        made = [];
+        newRound(prefix);
+      }
+
+      function showStart() {
+        lineup([2, 3, 5]);
+        partyEl.classList.add('show');
+      }
+
+      // ---- Wire up ----
+      let started = false;
+      Tap.on(playBtn, () => {
+        GameAudio.unlock();
+        startSet(started ? '' : "Let's make some numbers! ");
+        started = true;
+      });
+      Tap.on(replayBtn, () => {
+        if (locked) return;
+        GameAudio.unlock();
+        prompt();
+      });
+      fsBtn.addEventListener('click', () => {
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      });
+      window.addEventListener('resize', () => { if (target) { fitStack(); renderStack(); } });
+      document.addEventListener('contextmenu', e => e.preventDefault());
+
+      GameAudio.ready(() => {
+        showStart();
+        if (!demo) return;
+        startSet('');
+        if (demo === 'mid') {
+          // one part in place, more to go
+          const first = choices.find(c => c < target - start) || choices[0];
+          parts = [first]; sum = start + first;
+          renderStack();
+          choicesEl.querySelectorAll('.choice').forEach(x => x.classList.toggle('gone', sum + Number(x.dataset.n) > target));
+        } else if (demo === 'done') {
+          parts = [target - start]; sum = target;
+          overshoots = 0;
+          finishRound();
+        } else if (demo === 'party') {
+          made = [3, 5, 10, 14, 7];
+          endSet();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
