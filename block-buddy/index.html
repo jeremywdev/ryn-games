@@ -206,6 +206,8 @@
 
   <script src="../shared/blocks.js"></script>
   <script src="../shared/audio.js"></script>
+  <script src="../shared/tap.js"></script>
+  <script src="../shared/fx.js"></script>
   <script>
     (function () {
       const MAX = 20;
@@ -251,7 +253,7 @@
           k.style.background = Blocks.numberColor(i);
           if (Blocks.isLight(Blocks.numberColor(i))) k.classList.add('light');
         }
-        k.addEventListener('click', () => { GameAudio.unlock(); goTo(i); });
+        Tap.on(k, () => { GameAudio.unlock(); goTo(i); });
         keypadEl.appendChild(k);
         keys[i] = k;
       }
@@ -357,12 +359,14 @@
         clearTimeout(celebrateTimer);
         celebrateTimer = setTimeout(() => towerEl.classList.remove('celebrate'), 800);
         GameAudio.chime();
+        const r = towerEl.getBoundingClientRect();
+        FX.burstFrom(towerEl, { spread: Math.max(160, r.height * 0.6) });
         speakNumber(Blocks.phrase(target));
       }
 
       // ---- Wire up ----
-      plusBtn.addEventListener('click', () => { GameAudio.unlock(); addOne(); });
-      minusBtn.addEventListener('click', () => { GameAudio.unlock(); takeOne(); });
+      Tap.on(plusBtn, () => { GameAudio.unlock(); addOne(); });
+      Tap.on(minusBtn, () => { GameAudio.unlock(); takeOne(); });
 
       fsBtn.addEventListener('click', () => {
         const el = document.documentElement;

@@ -156,6 +156,19 @@
     .parent button.danger.holding .fill { width: 100%; transition: width 1.2s linear; }
     .parent button.danger span { position: relative; }
     .parent button.undo { background: #4aa84a; color: white; }
+    .voice-row label, .dim-label { color: #777; }
+    .band-row #bandRow { display: flex; gap: 1.2vmin; }
+    .parent button.band.current { background: #2b2b2b; color: white; }
+    .voice-row select {
+      font-family: inherit;
+      font-size: 2.4vmin;
+      padding: 1.2vmin 1.6vmin;
+      border-radius: 1.5vmin;
+      border: 0.3vmin solid #ccc;
+      background: white;
+      color: #333;
+      max-width: 60vw;
+    }
     .parent button[hidden] { display: none; }
     .legend { display: flex; gap: 2vmin; color: #777; }
     .legend span::before { content: ''; display: inline-block; width: 1.8vmin; height: 1.8vmin; border-radius: 0.4vmin; margin-right: 0.6vmin; vertical-align: middle; }
@@ -202,6 +215,19 @@
     <p class="sub" id="rangeLine"></p>
     <div class="grid" id="grid"></div>
     <div class="legend"><span class="g">mostly right</span><span class="o">mixed</span><span class="w">struggling</span><span>green ring = mastered</span></div>
+    <div class="row band-row">
+      <span class="dim-label">Ask about</span>
+      <div id="bandRow">
+        <button class="band" data-band="5">1 to 5</button>
+        <button class="band" data-band="10">1 to 10</button>
+        <button class="band" data-band="20">1 to 20</button>
+      </div>
+    </div>
+    <div class="row voice-row">
+      <label for="voiceSel">Voice</label>
+      <select id="voiceSel"></select>
+      <button id="tryVoiceBtn">Try it</button>
+    </div>
     <div class="row">
       <button id="closeBtn">Close</button>
       <button id="resetBtn" class="danger"><div class="fill"></div><span>Hold to reset progress</span></button>
@@ -210,11 +236,47 @@
   </div>
 
   <script src="shared/progress.js"></script>
+  <script src="shared/audio.js"></script>
+  <script src="shared/tap.js"></script>
   <script>
     (function () {
       document.addEventListener('contextmenu', e => e.preventDefault());
 
+      // Game tiles open on first contact, like every button inside the games.
+      document.querySelectorAll('a.tile').forEach(a => Tap.on(a, () => { location.href = a.getAttribute('href'); }));
+
       const parentEl = document.getElementById('parent');
+      const bandRow = document.getElementById('bandRow');
+      const voiceSel = document.getElementById('voiceSel');
+      const tryVoiceBtn = document.getElementById('tryVoiceBtn');
+
+      // Voice picker: every English voice this device offers, with the saved choice selected.
+      function renderVoices() {
+        const list = GameAudio.voices();
+        const saved = GameAudio.savedVoiceName();
+        const current = GameAudio.currentVoiceName();
+        voiceSel.innerHTML = '';
+        const auto = document.createElement('option');
+        auto.value = '';
+        auto.textContent = 'Automatic' + (current && !saved ? ' (' + current + ')' : '');
+        voiceSel.appendChild(auto);
+        list.forEach(v => {
+          const o = document.createElement('option');
+          o.value = v.name;
+          o.textContent = v.name + (v.local ? ' · on device' : ' · online');
+          voiceSel.appendChild(o);
+        });
+        voiceSel.value = saved && list.some(v => v.name === saved) ? saved : '';
+        voiceSel.disabled = list.length === 0;
+      }
+      voiceSel.addEventListener('change', () => { GameAudio.setVoice(voiceSel.value); renderVoices(); GameAudio.preview(); });
+      tryVoiceBtn.addEventListener('click', () => { GameAudio.unlock(); GameAudio.preview(); });
+      GameAudio.ready(renderVoices);
+      if ('speechSynthesis' in window) {
+        // audio.js owns onvoiceschanged; poll briefly in case voices arrive after it fired.
+        let tries = 0;
+        const t = setInterval(() => { renderVoices(); if (++tries > 10 || voiceSel.options.length > 1) clearInterval(t); }, 500);
+      }
       const grid = document.getElementById('grid');
       const rangeLine = document.getElementById('rangeLine');
       const resetBtn = document.getElementById('resetBtn');
@@ -239,9 +301,12 @@
           cell.innerHTML = '<b>' + s.n + '</b><small>' + score + '</small>' + mix;
           grid.appendChild(cell);
         });
-        rangeLine.innerHTML = 'Find Me is asking about 1 to ' + Progress.range() + '.<br>' +
+        const band = Progress.range();
+        rangeLine.innerHTML = 'Find Me is asking about 1 to ' + band + '. It widens on its own once every number in the band is found first try twice in a row.<br>' +
           'Score is first-try right / times asked. A mix-up is tapping that number when a different one was asked for.';
+        bandRow.querySelectorAll('.band').forEach(b => b.classList.toggle('current', Number(b.dataset.band) === band));
         undoBtn.hidden = !Progress.canUndoReset();
+        renderVoices();
       }
 
       // Press-and-hold helper: fires after `ms` of continuous contact, cancels on release or drift.
@@ -270,6 +335,12 @@
       resetBtn.addEventListener('click', e => e.preventDefault());
       undoBtn.addEventListener('click', () => { Progress.undoReset(); renderParent(); });
 
+      bandRow.addEventListener('click', e => {
+        const b = e.target.closest('.band');
+        if (!b) return;
+        Progress.setBand(Number(b.dataset.band));
+        renderParent();
+      });
       document.getElementById('closeBtn').addEventListener('click', () => parentEl.classList.remove('show'));
       // Dev convenience: index.html?parent=1 opens the grown-up corner directly.
       if (new URLSearchParams(location.search).get('parent')) { renderParent(); parentEl.classList.add('show'); }

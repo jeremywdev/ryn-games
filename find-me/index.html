@@ -90,10 +90,9 @@
     .tile.nudge { animation: nudge 0.9s ease-in-out infinite; }
     .tile.right {
       pointer-events: none;
-      transform: scale(1.08);
       background: white;
       border-color: var(--accent);
-      animation: none;
+      animation: found 0.55s cubic-bezier(.3,1.6,.5,1) forwards;
     }
     /* once found, the numeral shrinks into the corner and the blocks take the stage,
        so symbol and quantity sit side by side */
@@ -114,7 +113,10 @@
       padding-bottom: 2.5vmin;
     }
     .tile.right .reveal { display: flex; }
-    .tile .reveal .tower { animation: rise 0.4s cubic-bezier(.3,1.4,.5,1); transform-origin: bottom center; }
+    .tile .reveal .tower {
+      transform-origin: bottom center;
+      animation: rise 0.4s cubic-bezier(.3,1.4,.5,1), hop 0.8s ease-in-out 0.45s infinite;
+    }
 
     /* ---------- Start / end-of-set overlay ---------- */
     .party {
@@ -159,6 +161,12 @@
     }
     .play:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
 
+    @keyframes found {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.2) rotate(-3deg); }
+      70%  { transform: scale(1.05) rotate(2deg); }
+      100% { transform: scale(1.08) rotate(0); }
+    }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       20% { transform: translateX(-2vmin) rotate(-3deg); }
@@ -212,6 +220,8 @@
   <script src="../shared/blocks.js"></script>
   <script src="../shared/audio.js"></script>
   <script src="../shared/progress.js"></script>
+  <script src="../shared/tap.js"></script>
+  <script src="../shared/fx.js"></script>
   <script>
     (function () {
       const ROUNDS_PER_SET = 6;
@@ -235,6 +245,7 @@
       let roundsDone = 0;
       let found = [];
       let promptId = 0;           // so a stale prompt's end cannot clear a newer prompt's pulse
+      const CHEERS = ['Yes!', 'Hooray!', 'You found it!', "That's it!", 'Wow!', 'Super!'];
 
       // ---- Speech ----
       function promptText() { return 'Find ' + Blocks.WORDS[target] + '.'; }
@@ -309,7 +320,7 @@
           styleTile(tile, n);
           tile.innerHTML = '<span class="num">' + n + '</span><div class="reveal"><div class="tower"></div></div>';
           tile.dataset.n = n;
-          tile.addEventListener('click', () => { GameAudio.unlock(); onTap(tile, n); });
+          Tap.on(tile, () => { GameAudio.unlock(); onTap(tile, n); });
           tilesEl.appendChild(tile);
         });
         prompt(prefix);
@@ -352,8 +363,10 @@
           fitTower(tile.querySelector('.tower'), n, 21, 7);
           tilesEl.querySelectorAll('.tile').forEach(t => { if (t !== tile) t.classList.add('dim'); });
           GameAudio.chime();
+          FX.burstFrom(tile);
+          const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
           // Move on when the phrase is done; if something cut it off, still move on.
-          GameAudio.say(Blocks.phrase(target), { onDone: () => setTimeout(nextRound, 600) });
+          GameAudio.say(cheer + ' ' + Blocks.phrase(target), { onDone: () => setTimeout(nextRound, 700) });
           return;
         }
 
@@ -417,6 +430,10 @@
         partyEl.classList.add('show');
         GameAudio.chime();
         setTimeout(() => GameAudio.chime(), 350);
+        const cx = window.innerWidth / 2, cy = window.innerHeight * 0.38;
+        FX.burst(cx - window.innerWidth * 0.18, cy, { count: 40, spread: 320 });
+        setTimeout(() => FX.burst(cx + window.innerWidth * 0.18, cy, { count: 40, spread: 320 }), 300);
+        setTimeout(() => FX.burst(cx, cy - 40, { count: 50, spread: 400 }), 700);
         GameAudio.say(newOnes.length
           ? 'You found them all! Now some bigger numbers want to play!'
           : 'You found them all!');
@@ -437,12 +454,12 @@
       // ---- Wire up ----
       // The play button is the first tap: it unlocks sound and speech for the rest of the visit.
       let started = false;
-      playBtn.addEventListener('click', () => {
+      Tap.on(playBtn, () => {
         GameAudio.unlock();
         startSet(started ? '' : "Let's find some numbers! ");
         started = true;
       });
-      replayBtn.addEventListener('click', () => {
+      Tap.on(replayBtn, () => {
         if (locked) return; // not while a round is resolving or before play
         GameAudio.unlock();
         replayTaps++;

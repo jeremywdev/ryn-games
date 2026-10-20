@@ -35,13 +35,17 @@ Tap the corner button on any game to go fullscreen. The house button goes home.
 - `shared/audio.js` — speech via the Web Speech API plus synthesized pops and chimes. No audio files.
 - `shared/base.css` — touch-first reset: no zoom, no text selection, big corner buttons.
 - `shared/blocks.css` — the polished block look and the face, shared by every page.
-- `shared/progress.js` — per-numeral memory in localStorage: first-try hits and misses per round, streaks, mix-ups, and which numbers get confused with which. Drives which numbers quiz games ask, which distractors appear, and when the range widens (1-5, then 1-10, then 1-20; it never narrows).
+- `shared/tap.js` — buttons fire on first contact, not on release, because small fingers drag after touching.
+- `shared/fx.js` — confetti and stars for right answers.
+- `shared/progress.js` — per-numeral memory in localStorage: first-try hits and misses per round, streaks, mix-ups, and which numbers get confused with which. Drives which numbers quiz games ask, which distractors appear, and when the range widens (1-5, then 1-10, then 1-20; it never narrows on its own). A number is mastered after two first-try hits in a row.
 - `block-buddy/` — the sandbox: plus, minus, and a 1 to 20 keypad that builds the number while counting aloud.
 - `find-me/` — a play button starts a set; the voice asks for a number and she taps it among three or four. A wrong tile fades out; after a second miss the target's blocks appear as a hint and the right tile bobs. Six rounds per set, then a celebration, with a bigger one when the range widens.
 
 ## Grown-up corner
 
-Long-press the title on the home screen (or open `index.html?parent=1`) to see how she is doing on each number. Reset is a hold-to-confirm button and keeps one backup, so an accidental wipe can be undone. Progress lives only in that browser on that device.
+Long-press the title on the home screen (or open `index.html?parent=1`) to see how she is doing on each number and to set which range Find Me asks about. Reset is a hold-to-confirm button and keeps one backup, so an accidental wipe can be undone. Progress lives only in that browser on that device.
+
+The same screen has a voice picker. The games default to the most natural voice Chrome offers (Google's online voices when available, falling back to the on-device voice if the network one fails). Pick a voice, tap "Try it", and the choice is saved on that device.
 
 ## Dev shortcuts
 

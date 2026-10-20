@@ -14,9 +14,10 @@
  */
 (function () {
   const hasSpeech = 'speechSynthesis' in window;
+  const VOICE_KEY = 'ryn-games.voice'; // a voice chosen in the grown-up corner, by name
   let ctx = null;
   let voice = null;
-  let voicePicked = false;
+  let voiceLocked = false;   // true once a saved choice is applied or something has been spoken
   let enabled = true;
   let gen = 0;               // bumps on every non-queued say(); older unstarted utterances are dropped
   let chain = Promise.resolve();
@@ -36,24 +37,70 @@
     pickVoice();
   }
 
-  // Prefer a voice that lives on the device: no network latency, works offline,
-  // and it will not change under us when network voices arrive later.
+  function savedVoiceName() {
+    try { return localStorage.getItem(VOICE_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function englishVoices() {
+    return hasSpeech ? speechSynthesis.getVoices().filter(v => /^en([-_]|$)/i.test(v.lang)) : [];
+  }
+
+  // Choose a voice. A saved choice wins. Otherwise prefer the most natural
+  // sounding voices Chrome offers (Google's network voices, then anything
+  // labelled Natural), with the on-device voice as the fallback. Until
+  // something has been spoken we keep re-picking as more voices arrive.
   function pickVoice() {
-    if (!hasSpeech || voicePicked) return;
+    if (!hasSpeech || voiceLocked) return;
     const voices = speechSynthesis.getVoices();
     if (!voices.length) return;
-    const en = voices.filter(v => /^en([-_]|$)/i.test(v.lang));
-    const pools = [en.filter(v => v.localService), en, voices];
-    const prefer = [/Chrome OS US English/i, /Google US English/i, /Samantha/i, /Zira/i, /female/i, /en[-_]US/i, /en[-_]GB/i];
+    const saved = savedVoiceName();
+    if (saved) {
+      const hit = voices.find(v => v.name === saved);
+      if (hit) { voice = hit; voiceLocked = true; return; }
+    }
+    const en = englishVoices();
+    const pools = [en, voices];
+    const prefer = [/Google US English/i, /Natural/i, /Google UK English Female/i, /Samantha/i, /Zira/i, /Chrome OS US English/i, /en[-_]US/i, /en[-_]GB/i];
     for (const pool of pools) {
       if (!pool.length) continue;
       for (const re of prefer) {
         const hit = pool.find(v => re.test(v.name) || re.test(v.lang));
-        if (hit) { voice = hit; voicePicked = true; return; }
+        if (hit) { voice = hit; return; }
       }
-      voice = pool[0]; voicePicked = true; return;
+      voice = pool[0]; return;
     }
   }
+
+  /** An on-device English voice, for when a network voice cannot be reached. */
+  function localFallback() {
+    const en = englishVoices();
+    return en.find(v => v.localService) || en[0] || null;
+  }
+
+  /** English voices for a picker: [{ name, lang, local, current }]. */
+  function voices() {
+    return englishVoices().map(v => ({ name: v.name, lang: v.lang, local: !!v.localService, current: !!voice && voice.name === v.name }));
+  }
+
+  /** Save a voice by name ('' = automatic) and switch to it now. */
+  function setVoice(name) {
+    try { if (name) localStorage.setItem(VOICE_KEY, name); else localStorage.removeItem(VOICE_KEY); } catch (e) { /* ignore */ }
+    voiceLocked = false;
+    voice = null;
+    pickVoice();
+    voiceLocked = !!name;
+  }
+
+  function currentVoiceName() { return voice ? voice.name : ''; }
+
+  // See the 'not-allowed' handling in say(): the last refused line is retried on release.
+  let retryOnRelease = null;
+  document.addEventListener('pointerup', () => {
+    unlock();
+    const r = retryOnRelease;
+    retryOnRelease = null;
+    if (r) r();
+  }, true);
 
   const readyCallbacks = [];
   function voicesLoaded() {
@@ -116,10 +163,30 @@
     u.rate = opts.rate || 0.95;
     u.pitch = opts.pitch || 1.15;
     u.volume = 1;
-    u.onstart = () => arm(1500 + 90 * text.length);
+    u.onstart = () => { voiceLocked = true; arm(1500 + 90 * text.length); };
     u.onend = () => done('end');
     u.onerror = e => {
       const code = e && e.error;
+      // A network voice that cannot be reached: switch to an on-device voice and say it again.
+      if ((code === 'network' || code === 'synthesis-failed' || code === 'synthesis-unavailable') && !opts._retried) {
+        const fb = localFallback();
+        if (fb && (!voice || fb.name !== voice.name)) {
+          voice = fb;
+          voiceLocked = true;
+          finished = true;
+          clear();
+          say(text, Object.assign({}, opts, { _retried: true, queue: false }));
+          return;
+        }
+      }
+      // Refused for lack of a user gesture (taps fire on contact, activation
+      // arrives on release): say it again the moment the finger lifts.
+      if (code === 'not-allowed' && !opts._retried) {
+        finished = true;
+        clear();
+        retryOnRelease = () => say(text, Object.assign({}, opts, { _retried: true }));
+        return;
+      }
       if (opts.onError) opts.onError(code);
       done(code === 'interrupted' || code === 'canceled' ? 'interrupted' : 'end');
     };
@@ -191,5 +258,13 @@
     if (!enabled && hasSpeech) speechSynthesis.cancel();
   }
 
-  window.GameAudio = { unlock, ready, say, pop, unpop, chime, nope, setEnabled, get enabled() { return enabled; } };
+  /** A short sample for auditioning voices. */
+  function preview() {
+    say('Fourteen! Ten and four. Find six.');
+  }
+
+  window.GameAudio = {
+    unlock, ready, say, preview, voices, setVoice, currentVoiceName, savedVoiceName,
+    pop, unpop, chime, nope, setEnabled, get enabled() { return enabled; }
+  };
 })();

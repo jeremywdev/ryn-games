@@ -100,10 +100,14 @@
       .sort((a, b) => b.count - a.count);
   }
 
-  /** A number counts as mastered after a few right answers and a short clean streak. */
+  /**
+   * A number counts as mastered after two first-try hits in a row. Sessions
+   * are short, so the bar is low; a later mix-up breaks the streak and the
+   * number gets drilled again through weight(), without shrinking the band.
+   */
   function mastered(n) {
     const s = get(n);
-    return s.hits >= 3 && s.streak >= 2;
+    return s.streak >= 2;
   }
 
   function allMastered(from, to) {
@@ -125,6 +129,21 @@
       save();
     }
     return data.band;
+  }
+
+  /**
+   * A grown-up can set the band directly (5, 10 or 20). Narrowing means
+   * "practise these again", so streaks inside the new band are cleared and
+   * she has to re-master them before it widens on its own.
+   */
+  function setBand(b) {
+    if (b !== 5 && b !== 10 && b !== 20) return;
+    if (b < data.band) {
+      for (let i = 1; i <= b; i++) if (data.numbers[i]) data.numbers[i].streak = 0;
+    }
+    data.band = b;
+    data.pendingUnlock = 0;
+    save();
   }
 
   /** The band unlocked since the last call, or 0. Lets a game celebrate the level-up once. */
@@ -197,7 +216,7 @@
   }
 
   window.Progress = {
-    get, record, recordConfusion, confusedWith, mastered, range, takeUnlock,
+    get, record, recordConfusion, confusedWith, mastered, range, setBand, takeUnlock,
     weight, pickTarget, all, reset, canUndoReset, undoReset, MAX
   };
 })();
