@@ -112,20 +112,27 @@
     .choice {
       --c: #999;
       width: 17vmin;
-      height: 28vmin;
+      height: min(28vmin, 34vh);          /* never taller than a third of a short screen */
       border-radius: 3.5vmin;
       background: white;
       border: 0.9vmin solid var(--c);
       box-shadow: 0 0.9vmin 0 rgba(0,0,0,0.16), 0 1vmin 2vmin rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-end;
-      padding-bottom: 1vmin;
-      gap: 1vmin;
+      /* two fixed rows: the tower area and the numeral; the tower is sized to its area in JS */
+      display: grid;
+      grid-template-rows: 1fr auto;
+      justify-items: center;
+      padding: 1.5vmin 0 1vmin;
+      row-gap: 0.8vmin;
       transition: transform 0.12s, opacity 0.4s, box-shadow 0.12s;
     }
     .choice:active { transform: translateY(0.6vmin); box-shadow: 0 0.3vmin 0 rgba(0,0,0,0.16); }
+    .choice .tower-cell {
+      align-self: stretch;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-height: 0;
+    }
     .choice .tower { --b: 3.1vmin; }
     .choice .label {
       font-size: 6.5vmin;
@@ -466,18 +473,34 @@
           btn.className = 'choice' + (Blocks.isLight(c) ? ' light' : '');
           btn.style.setProperty('--c', c);
           btn.dataset.n = n;
+          const cell = document.createElement('div');
+          cell.className = 'tower-cell';
           const tower = document.createElement('div');
           tower.className = 'tower';
-          // taller parts get smaller blocks so every tower fits its card
-          tower.style.setProperty('--b', Math.min(3.1, 18 / (n + 0.6)) + 'vmin');
           Blocks.render(tower, n);
+          cell.appendChild(tower);
           const label = document.createElement('div');
           label.className = 'label';
           label.textContent = n;
-          btn.appendChild(tower);
+          btn.appendChild(cell);
           btn.appendChild(label);
           Tap.on(btn, () => { GameAudio.unlock(); onChoice(btn, n); });
           choicesEl.appendChild(btn);
+        });
+        fitChoiceTowers();
+      }
+
+      // Size each choice tower from the room its card actually has, so a tall
+      // part never runs into the numeral below it, whatever the screen shape.
+      function fitChoiceTowers() {
+        const vmin = Math.min(window.innerWidth, window.innerHeight) / 100;
+        choicesEl.querySelectorAll('.choice').forEach(btn => {
+          const n = Number(btn.dataset.n);
+          const cell = btn.querySelector('.tower-cell');
+          const tower = btn.querySelector('.tower');
+          const room = cell.clientHeight - 4;
+          const b = Math.max(8, Math.min(3.1 * vmin, room / (n + 0.15)));
+          tower.style.setProperty('--b', b + 'px');
         });
       }
 
@@ -641,7 +664,7 @@
         const el = document.documentElement;
         if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
       });
-      window.addEventListener('resize', () => { if (target) { fitStack(); renderStack(); } });
+      window.addEventListener('resize', () => { if (target) { fitStack(); renderStack(); fitChoiceTowers(); } });
       document.addEventListener('contextmenu', e => e.preventDefault());
 
       GameAudio.ready(() => {
