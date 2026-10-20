@@ -89,22 +89,30 @@
       font-size: 42vmin;
       font-weight: 700;
       line-height: 0.9;
-      /* same light-to-dark sweep as a block face, clipped to the glyphs */
-      background: linear-gradient(155deg,
-        color-mix(in srgb, var(--num-color), white 28%) 0%,
-        var(--num-color) 50%,
-        color-mix(in srgb, var(--num-color), black 16%) 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      -webkit-text-stroke: 0.5vmin color-mix(in srgb, var(--num-color), black 45%);
+      /* plain colour first; the glossy version below needs color-mix() */
+      color: var(--num-color);
+      -webkit-text-stroke: 0.5vmin rgba(0,0,0,0.4);
       filter: drop-shadow(0 0.8vmin 0.6vmin rgba(0,0,0,0.18));
       position: relative;
+    }
+    @supports (color: color-mix(in srgb, red, blue)) {
+      .numeral {
+        /* same light-to-dark sweep as a block face, clipped to the glyphs */
+        background: linear-gradient(155deg,
+          color-mix(in srgb, var(--num-color), white 28%) 0%,
+          var(--num-color) 50%,
+          color-mix(in srgb, var(--num-color), black 16%) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-stroke: 0.5vmin color-mix(in srgb, var(--num-color), black 45%);
+      }
     }
     .numeral.rainbow {
       background: linear-gradient(180deg,#e4322b,#f5841f,#f9d71c,#4aa84a,#37b3e3,#5c3ba6,#9b4dcf);
       -webkit-background-clip: text;
       background-clip: text;
+      color: transparent;
       -webkit-text-stroke: 0.5vmin rgba(0,0,0,0.4);
     }
     .numeral.bump { animation: bump 0.3s ease-out; }
@@ -296,7 +304,13 @@
         if (n >= MAX) return;
         show(n + 1, { pop: true });
         GameAudio.pop(n);
-        speakNumber(Blocks.WORDS[n]);
+        speakNumber(stepWord(n));
+      }
+
+      // Single steps say the plain word, except teens, which get the
+      // "fourteen, ten and four" form every time: that is the lesson.
+      function stepWord(v) {
+        return v > 10 ? Blocks.phrase(v) : Blocks.WORDS[v];
       }
 
       function takeOne() {
@@ -304,7 +318,7 @@
         if (n <= 0) return;
         show(n - 1);
         GameAudio.unpop(n);
-        speakNumber(Blocks.WORDS[n]);
+        speakNumber(stepWord(n));
       }
 
       // ---- Keypad: count up or down to the target, one block at a time ----
@@ -336,8 +350,12 @@
         tick();
       }
 
+      let celebrateTimer = null;
       function celebrate(target) {
         restartAnim(towerEl, 'celebrate');
+        // The class must come off again or the grin sticks and the bounce never plays.
+        clearTimeout(celebrateTimer);
+        celebrateTimer = setTimeout(() => towerEl.classList.remove('celebrate'), 800);
         GameAudio.chime();
         speakNumber(Blocks.phrase(target));
       }
@@ -352,7 +370,7 @@
       });
 
       document.addEventListener('contextmenu', e => e.preventDefault());
-      document.addEventListener('touchstart', () => GameAudio.unlock(), { once: true, passive: true });
+      document.addEventListener('pointerup', () => GameAudio.unlock(), { once: true });
 
       fit();
       // Dev convenience: open block-buddy/?n=14 to start on a given number.

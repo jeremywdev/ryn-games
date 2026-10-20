@@ -35,18 +35,18 @@ Tap the corner button on any game to go fullscreen. The house button goes home.
 - `shared/audio.js` — speech via the Web Speech API plus synthesized pops and chimes. No audio files.
 - `shared/base.css` — touch-first reset: no zoom, no text selection, big corner buttons.
 - `shared/blocks.css` — the polished block look and the face, shared by every page.
-- `shared/progress.js` — per-numeral memory in localStorage: hits, misses, streaks. Drives which numbers quiz games ask and when the range widens (1-10, then 1-20).
+- `shared/progress.js` — per-numeral memory in localStorage: first-try hits and misses per round, streaks, mix-ups, and which numbers get confused with which. Drives which numbers quiz games ask, which distractors appear, and when the range widens (1-5, then 1-10, then 1-20; it never narrows).
 - `block-buddy/` — the sandbox: plus, minus, and a 1 to 20 keypad that builds the number while counting aloud.
-- `find-me/` — the voice asks for a number, she taps it among three or four. Six rounds per set, then a celebration.
+- `find-me/` — a play button starts a set; the voice asks for a number and she taps it among three or four. A wrong tile fades out; after a second miss the target's blocks appear as a hint and the right tile bobs. Six rounds per set, then a celebration, with a bigger one when the range widens.
 
 ## Grown-up corner
 
-Long-press the title on the home screen (or open `index.html?parent=1`) to see how she is doing on each number and to reset progress. Progress lives only in that browser on that device.
+Long-press the title on the home screen (or open `index.html?parent=1`) to see how she is doing on each number. Reset is a hold-to-confirm button and keeps one backup, so an accidental wipe can be undone. Progress lives only in that browser on that device.
 
 ## Dev shortcuts
 
 - `block-buddy/?n=14` starts on a given number.
-- `find-me/?demo=right` shows a solved round, `find-me/?demo=party` the end-of-set screen.
+- `find-me/?demo=right` shows a solved round, `find-me/?demo=hint` a stuck round with the hint, `find-me/?demo=party` the end-of-set screen.
 
 ## Design rules
 

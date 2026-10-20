@@ -22,6 +22,7 @@
       font-size: 8vmin;
       color: #555;
       font-weight: 700;
+      touch-action: none; /* a finger that drifts during the long-press must not become a scroll */
     }
     .tiles {
       display: flex;
@@ -123,6 +124,8 @@
     }
     .cell b { font-size: 3vmin; }
     .cell small { font-size: 1.8vmin; opacity: 0.75; }
+    .cell small.mix { font-size: 1.4vmin; color: #a33; opacity: 1; }
+    .parent .sub { text-align: center; line-height: 1.4; }
     .cell.good { background: #bfe5bf; }
     .cell.okay { background: #f8ecb0; }
     .cell.weak { background: #f6c3bf; }
@@ -135,7 +138,25 @@
       background: #ddd;
       color: #333;
     }
-    .parent button.danger { background: #e4322b; color: white; }
+    .parent button.danger {
+      background: #e4322b;
+      color: white;
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+    }
+    /* hold-to-reset: a dark bar fills the button over the hold time */
+    .parent button.danger .fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 0;
+      background: rgba(0,0,0,0.3);
+      transition: width 0s;
+    }
+    .parent button.danger.holding .fill { width: 100%; transition: width 1.2s linear; }
+    .parent button.danger span { position: relative; }
+    .parent button.undo { background: #4aa84a; color: white; }
+    .parent button[hidden] { display: none; }
     .legend { display: flex; gap: 2vmin; color: #777; }
     .legend span::before { content: ''; display: inline-block; width: 1.8vmin; height: 1.8vmin; border-radius: 0.4vmin; margin-right: 0.6vmin; vertical-align: middle; }
     .legend .g::before { background: #bfe5bf; } .legend .o::before { background: #f8ecb0; } .legend .w::before { background: #f6c3bf; }
@@ -183,7 +204,8 @@
     <div class="legend"><span class="g">mostly right</span><span class="o">mixed</span><span class="w">struggling</span><span>green ring = mastered</span></div>
     <div class="row">
       <button id="closeBtn">Close</button>
-      <button id="resetBtn" class="danger">Reset progress</button>
+      <button id="resetBtn" class="danger"><div class="fill"></div><span>Hold to reset progress</span></button>
+      <button id="undoBtn" class="undo" hidden>Undo reset</button>
     </div>
   </div>
 
@@ -196,7 +218,7 @@
       const grid = document.getElementById('grid');
       const rangeLine = document.getElementById('rangeLine');
       const resetBtn = document.getElementById('resetBtn');
-      let armed = false;
+      const undoBtn = document.getElementById('undoBtn');
 
       function renderParent() {
         grid.innerHTML = '';
@@ -205,33 +227,52 @@
           cell.className = 'cell';
           if (s.seen > 0) {
             const rate = s.hits / s.seen;
-            cell.classList.add(rate >= 0.8 ? 'good' : rate >= 0.5 ? 'okay' : 'weak');
+            let tone = rate >= 0.8 ? 'good' : rate >= 0.5 ? 'okay' : 'weak';
+            if (tone === 'good' && s.confused > s.hits) tone = 'okay'; // one lucky hit does not outweigh mix-ups
+            cell.classList.add(tone);
+          } else if (s.confused > 0) {
+            cell.classList.add('okay'); // never asked, but she has mistaken it for others
           }
           if (s.mastered) cell.classList.add('mastered');
-          cell.innerHTML = '<b>' + s.n + '</b><small>' + (s.seen ? s.hits + '/' + s.seen : '–') + '</small>';
+          const score = s.seen ? s.hits + '/' + s.seen : '–';
+          const mix = s.confused ? '<small class="mix">' + s.confused + ' mix-up' + (s.confused === 1 ? '' : 's') + '</small>' : '';
+          cell.innerHTML = '<b>' + s.n + '</b><small>' + score + '</small>' + mix;
           grid.appendChild(cell);
         });
-        rangeLine.textContent = 'Find Me is asking about 1 to ' + Progress.range() + '. Counts are right answers / times asked.';
-        resetBtn.textContent = 'Reset progress';
-        armed = false;
+        rangeLine.innerHTML = 'Find Me is asking about 1 to ' + Progress.range() + '.<br>' +
+          'Score is first-try right / times asked. A mix-up is tapping that number when a different one was asked for.';
+        undoBtn.hidden = !Progress.canUndoReset();
       }
 
-      // Long-press the title (700ms) to open. A quick tap does nothing.
-      const title = document.getElementById('title');
-      let timer = null;
-      const start = () => { timer = setTimeout(() => { renderParent(); parentEl.classList.add('show'); }, 700); };
-      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-      title.addEventListener('pointerdown', start);
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => title.addEventListener(ev, cancel));
+      // Press-and-hold helper: fires after `ms` of continuous contact, cancels on release or drift.
+      function holdToFire(el, ms, onFire, onState) {
+        let timer = null;
+        const start = e => {
+          if (e.button !== undefined && e.button !== 0) return;
+          if (onState) onState(true);
+          timer = setTimeout(() => { timer = null; if (onState) onState(false); onFire(); }, ms);
+        };
+        const cancel = () => {
+          if (timer) { clearTimeout(timer); timer = null; }
+          if (onState) onState(false);
+        };
+        el.addEventListener('pointerdown', start);
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, cancel));
+      }
+
+      // Long-press the title to open. A quick tap does nothing.
+      holdToFire(document.getElementById('title'), 800, () => { renderParent(); parentEl.classList.add('show'); });
+
+      // Reset needs a deliberate 1.2 s hold, and keeps one backup so it can be undone.
+      holdToFire(resetBtn, 1200,
+        () => { Progress.reset(); renderParent(); },
+        holding => resetBtn.classList.toggle('holding', holding));
+      resetBtn.addEventListener('click', e => e.preventDefault());
+      undoBtn.addEventListener('click', () => { Progress.undoReset(); renderParent(); });
 
       document.getElementById('closeBtn').addEventListener('click', () => parentEl.classList.remove('show'));
       // Dev convenience: index.html?parent=1 opens the grown-up corner directly.
       if (new URLSearchParams(location.search).get('parent')) { renderParent(); parentEl.classList.add('show'); }
-      resetBtn.addEventListener('click', () => {
-        if (!armed) { armed = true; resetBtn.textContent = 'Tap again to confirm'; return; }
-        Progress.reset();
-        renderParent();
-      });
     })();
   </script>
 </body>

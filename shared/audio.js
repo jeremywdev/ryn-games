@@ -2,11 +2,24 @@
  * Shared audio for ryn-games: spoken words via the Web Speech API and
  * tiny synthesized sound effects via WebAudio. No audio files needed.
  * Plain script, exposes window.GameAudio.
+ *
+ * Speech notes (Chrome / Chrome OS):
+ *  - speak() is refused before the first user gesture ('not-allowed').
+ *  - cancel() immediately followed by speak() sometimes drops the new
+ *    utterance, so a cancel is followed by a short gap before speaking.
+ *  - onend is not guaranteed, so every utterance has a fallback timer that
+ *    scales with its length, armed from when speech actually starts.
+ *  - An interrupted utterance is reported separately from a finished one so
+ *    callers can tell "she heard it" from "we cut it off".
  */
 (function () {
+  const hasSpeech = 'speechSynthesis' in window;
   let ctx = null;
   let voice = null;
+  let voicePicked = false;
   let enabled = true;
+  let gen = 0;               // bumps on every non-queued say(); older unstarted utterances are dropped
+  let chain = Promise.resolve();
 
   function audioCtx() {
     if (!ctx) {
@@ -17,38 +30,44 @@
     return ctx;
   }
 
-  /** Call from the first user gesture so browsers let us make sound. */
+  /** Call from a user gesture so browsers let us make sound. */
   function unlock() {
     audioCtx();
     pickVoice();
   }
 
+  // Prefer a voice that lives on the device: no network latency, works offline,
+  // and it will not change under us when network voices arrive later.
   function pickVoice() {
-    if (!('speechSynthesis' in window)) return;
+    if (!hasSpeech || voicePicked) return;
     const voices = speechSynthesis.getVoices();
     if (!voices.length) return;
-    const en = voices.filter(v => /^en/i.test(v.lang));
-    const prefer = [
-      /Google US English/i, /Samantha/i, /Zira/i, /Chrome OS US English/i,
-      /female/i, /en-US/i, /en-GB/i
-    ];
-    for (const re of prefer) {
-      const hit = en.find(v => re.test(v.name) || re.test(v.lang));
-      if (hit) { voice = hit; return; }
+    const en = voices.filter(v => /^en([-_]|$)/i.test(v.lang));
+    const pools = [en.filter(v => v.localService), en, voices];
+    const prefer = [/Chrome OS US English/i, /Google US English/i, /Samantha/i, /Zira/i, /female/i, /en[-_]US/i, /en[-_]GB/i];
+    for (const pool of pools) {
+      if (!pool.length) continue;
+      for (const re of prefer) {
+        const hit = pool.find(v => re.test(v.name) || re.test(v.lang));
+        if (hit) { voice = hit; voicePicked = true; return; }
+      }
+      voice = pool[0]; voicePicked = true; return;
     }
-    voice = en[0] || voices[0];
   }
 
   const readyCallbacks = [];
   function voicesLoaded() {
-    return !('speechSynthesis' in window) || speechSynthesis.getVoices().length > 0;
+    return !hasSpeech || speechSynthesis.getVoices().length > 0;
   }
-  if ('speechSynthesis' in window) {
+  if (hasSpeech) {
     speechSynthesis.onvoiceschanged = function () {
       pickVoice();
       while (readyCallbacks.length) readyCallbacks.shift()();
     };
     pickVoice();
+    // Do not keep talking on a page the child has left.
+    window.addEventListener('pagehide', () => speechSynthesis.cancel());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) speechSynthesis.cancel(); });
   }
 
   /** Run cb as soon as a voice can be used: right now if voices are loaded, else when they arrive. */
@@ -61,41 +80,63 @@
   }
 
   /**
-   * Speak text, cancelling anything already being said.
-   * opts.onEnd fires once when the word has finished (or could not be spoken),
-   * so callers can pace a sequence off the real speech length instead of a timer.
+   * Speak text. By default it replaces whatever is being said; opts.queue
+   * lines it up behind the current utterance instead.
+   *   opts.onEnd        finished naturally (or could not be spoken at all)
+   *   opts.onInterrupt  cut off by a later say() or a cancel
+   *   opts.onDone       either of the above, always exactly once
+   *   opts.onError(code) the engine reported an error, e.g. 'not-allowed'
    */
   function say(text, opts) {
     opts = opts || {};
     let finished = false;
-    let fallback = null;
-    function finish() {
+    let timer = null;
+    const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const arm = ms => { clear(); timer = setTimeout(() => done('end'), ms); };
+    function done(how) {
       if (finished) return;
       finished = true;
-      if (fallback) clearTimeout(fallback);
-      if (opts.onEnd) opts.onEnd();
+      clear();
+      if (how === 'interrupted') { if (opts.onInterrupt) opts.onInterrupt(); }
+      else if (opts.onEnd) opts.onEnd();
+      if (opts.onDone) opts.onDone(how);
     }
 
-    if (!enabled || !('speechSynthesis' in window)) {
+    if (!enabled || !hasSpeech) {
       // No voice: still let sequences advance at a readable pace.
-      if (opts.onEnd) fallback = setTimeout(finish, 450);
+      timer = setTimeout(() => done('end'), 450);
       return;
     }
-    if (!opts.queue) speechSynthesis.cancel();
+
+    if (!opts.queue) gen++;
+    const myGen = gen;
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
+    u.lang = (voice && voice.lang) || 'en-US';
     u.rate = opts.rate || 0.95;
     u.pitch = opts.pitch || 1.15;
     u.volume = 1;
-    u.onend = finish;
-    u.onerror = function (e) {
-      // e.error is 'not-allowed' when the browser wants a user gesture first.
-      if (opts.onError) opts.onError(e && e.error);
-      finish();
+    u.onstart = () => arm(1500 + 90 * text.length);
+    u.onend = () => done('end');
+    u.onerror = e => {
+      const code = e && e.error;
+      if (opts.onError) opts.onError(code);
+      done(code === 'interrupted' || code === 'canceled' ? 'interrupted' : 'end');
     };
-    // Some engines never fire onend; never let a sequence stall on that.
-    if (opts.onEnd) fallback = setTimeout(finish, 2500);
-    speechSynthesis.speak(u);
+
+    const needCancel = !opts.queue && (speechSynthesis.speaking || speechSynthesis.pending);
+    if (needCancel) speechSynthesis.cancel();
+
+    // All starts go through one chain so order is preserved; a cancel adds a
+    // short gap so Chrome does not drop the next utterance.
+    chain = chain
+      .then(() => new Promise(res => setTimeout(res, needCancel ? 40 : 0)))
+      .then(() => {
+        if (finished) return;
+        if (myGen !== gen) { done('interrupted'); return; } // superseded before it started
+        arm(opts.queue ? 8000 : 3000); // never started: give up eventually
+        speechSynthesis.speak(u);
+      });
   }
 
   function tone(freq, duration, type, when, gain) {
@@ -138,7 +179,7 @@
     tone(784, 0.30, 'sine', 0.24, 0.20);
   }
 
-  /** Gentle "nope" for a wrong tap (used by later games). */
+  /** Gentle "nope" for a wrong tap. */
   function nope() {
     if (!enabled) return;
     tone(220, 0.15, 'triangle', 0, 0.12);
@@ -147,7 +188,7 @@
 
   function setEnabled(v) {
     enabled = !!v;
-    if (!enabled && 'speechSynthesis' in window) speechSynthesis.cancel();
+    if (!enabled && hasSpeech) speechSynthesis.cancel();
   }
 
   window.GameAudio = { unlock, ready, say, pop, unpop, chime, nope, setEnabled, get enabled() { return enabled; } };

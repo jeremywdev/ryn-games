@@ -86,6 +86,7 @@
     const pop = typeof opts.pop === 'number' ? opts.pop : -1;
     container.innerHTML = '';
     container.classList.toggle('empty', n <= 0);
+    container.classList.toggle('teen', n > 10 && n < 20); // blocks.css glances the eyes at the ones column
 
     const cols = columns(n);
     let globalIndex = 0;
