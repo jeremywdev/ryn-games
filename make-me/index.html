@@ -101,6 +101,35 @@
     .stack .block.ghost::before { display: none; }
     .stack .block.ghost.next { border-color: rgba(0,0,0,0.45); animation: pulse 1.2s ease-in-out infinite; }
 
+    /* Levels 3 and 4 start with blocks already in place. A bracket with their
+       numeral marks them as "what you were given", so they don't look like her
+       own work and restart clearly goes back to them. */
+    .stack .col.has-given { position: relative; }
+    .given-bracket {
+      position: absolute;
+      left: calc(var(--b) * -0.42);
+      bottom: 0;
+      width: calc(var(--b) * 0.16);
+      border-radius: calc(var(--b) * 0.1);
+      background: var(--g);
+    }
+    .given-bracket span {
+      position: absolute;
+      right: calc(var(--b) * 0.35);
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: calc(var(--b) * 0.85);
+      font-weight: 700;
+      line-height: 1;
+      color: var(--g);
+      -webkit-text-stroke: max(1px, calc(var(--b) * 0.02)) rgba(0,0,0,0.35);
+    }
+    .stack .block.leaving { animation: pop-off 0.28s ease-in forwards; }
+    @keyframes pop-off {
+      0%   { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(calc(var(--b) * -0.6)) scale(0.3); opacity: 0; }
+    }
+
     /* ---------- Choices: little towers to add ---------- */
     .choices {
       display: flex;
@@ -416,6 +445,7 @@
             const block = document.createElement('div');
             block.className = 'block';
             if (idx < real) {
+              if (idx >= start) block.classList.add('added');
               block.style.setProperty('--c', colors[idx]);
               if (Blocks.isLight(colors[idx])) block.classList.add('light');
               if (extraPart && idx === real - 1) block.classList.add('pop');
@@ -429,22 +459,43 @@
           }
           stackEl.appendChild(col);
         });
+        if (start > 0) {
+          // Given blocks are always the bottom `start` rows of the first column.
+          const col0 = stackEl.querySelector('.col');
+          col0.classList.add('has-given');
+          const bracket = document.createElement('div');
+          bracket.className = 'given-bracket';
+          bracket.style.setProperty('--g', start === 10 ? '#8c8c8c' : Blocks.numberColor(start));
+          bracket.style.height = 'calc(var(--b) * ' + (start * 0.97 + 0.03).toFixed(2) + ')';
+          bracket.innerHTML = '<span>' + start + '</span>';
+          col0.appendChild(bracket);
+        }
         restartAnim(stackEl, 'bounce');
         restartBtn.classList.toggle('show', parts.length > 0 || !!extraPart);
       }
 
-      // Clear the parts she has placed (the starting blocks stay) and ask again.
+      // Clear every part she has placed and ask again. On levels 3 and 4 the
+      // given blocks (marked by the bracket) stay, since they are the puzzle.
       function restart() {
         if (partyEl.classList.contains('show') || sum === target) return;
-        runId++;                       // stops a count-on in progress
+        const run = ++runId;           // stops a count-on in progress
         parts = [];
         sum = start;
-        locked = false;
-        choicesEl.classList.remove('locked');
-        choicesEl.querySelectorAll('.choice').forEach(x => x.classList.remove('gone', 'nudge'));
-        renderStack();
+        locked = true;                 // no taps while her blocks pop off
+        choicesEl.classList.add('locked');
+        clearTimeout(idleTimer);
+        restartBtn.classList.remove('show');
+        const leaving = stackEl.querySelectorAll('.block.added');
+        leaving.forEach((b, i) => { b.style.animationDelay = (i * 0.03) + 's'; b.classList.add('leaving'); });
         GameAudio.unpop(start);
-        prompt('Start again. ');
+        setTimeout(() => {
+          if (run !== runId) return;
+          locked = false;
+          choicesEl.classList.remove('locked');
+          choicesEl.querySelectorAll('.choice').forEach(x => x.classList.remove('gone', 'nudge'));
+          renderStack();
+          prompt('Start again! ');
+        }, leaving.length ? 320 + leaving.length * 30 : 0);
       }
 
       function makeFace() {
