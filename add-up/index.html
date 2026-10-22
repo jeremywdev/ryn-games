@@ -39,6 +39,31 @@
     .replay svg { width: 55%; height: 55%; fill: white; }
     .replay.pulse { animation: pulse 1.2s ease-in-out infinite; }
 
+    /* Left column: the speaker, and under it a "count with me" button that
+       appears once she might want help. Help is always her choice: the game
+       never starts counting on its own, and the tiles stay live while it counts. */
+    .side { display: flex; flex-direction: column; align-items: center; gap: 4vmin; }
+    .helpcount {
+      width: 14vmin;
+      height: 14vmin;
+      border-radius: 50%;
+      background: #37b3e3;
+      color: white;
+      font-size: 5vmin;
+      font-weight: 700;
+      letter-spacing: -0.2vmin;
+      text-shadow: 0 0.3vmin 0 rgba(0,0,0,0.25);
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.6);
+      transition: opacity 0.3s, transform 0.3s, background 0.2s;
+    }
+    .helpcount.show { opacity: 1; pointer-events: auto; transform: scale(1); }
+    .helpcount.show.pulse { animation: pulse 1.2s ease-in-out 2; }
+    .helpcount.counting { background: #4aa84a; }
+    .helpcount:active { box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+
     /* A + B = ?   Each operand is a slot: its tower above, its numeral below. */
     .eq {
       height: 100%;
@@ -249,11 +274,14 @@
 
   <div class="app">
     <div class="stage">
-      <button class="replay" id="replayBtn" aria-label="Say it again">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
-        </svg>
-      </button>
+      <div class="side">
+        <button class="replay" id="replayBtn" aria-label="Say it again">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
+          </svg>
+        </button>
+        <button class="helpcount" id="helpBtn" aria-label="Count with me">123</button>
+      </div>
       <div class="eq" id="eq">
         <div class="slot" id="slotA"><div class="tower" id="towerA"></div><div class="n" id="nA"></div></div>
         <div class="op" id="op">+</div>
@@ -282,13 +310,16 @@
       const MAX_LEVEL = 4;
       const CLEAN_ROUNDS_TO_ADVANCE = 5;
       const ROUNDS_PER_SET = 5;
-      const IDLE_MS = 10000;
+      // Quiet time before a little help is offered: first the count button
+      // appears (no sound), later the question is asked once more. Nothing else.
+      const IDLE_HELP_MS = 20000;
+      const IDLE_REPEAT_MS = 25000;
       const CHEERS = ['Yes!', 'Hooray!', "That's it!", 'Wow!', 'Super!', 'You got it!'];
 
       const $ = id => document.getElementById(id);
       const eqEl = $('eq'), towerA = $('towerA'), towerB = $('towerB'), nA = $('nA'), nB = $('nB');
       const slotB = $('slotB'), opEl = $('op'), answerEl = $('answer');
-      const tilesEl = $('tiles'), replayBtn = $('replayBtn');
+      const tilesEl = $('tiles'), replayBtn = $('replayBtn'), helpBtn = $('helpBtn');
       const partyEl = $('party'), lineupEl = $('lineup'), playBtn = $('playBtn');
       const params = new URLSearchParams(location.search);
       // Dev conveniences: ?level=3 forces a level; ?demo=fresh|hint|done|party freezes a state.
@@ -308,6 +339,7 @@
       let promptId = 0;
       let idleTimer = null;
       let idleRepeats = 0;
+      let countId = 0;            // bumps to stop a count-along
 
       const W = n => Blocks.WORDS[n];
       const isTake = () => level === 4;
@@ -386,13 +418,50 @@
 
       function armIdle() {
         clearTimeout(idleTimer);
-        if (locked) return;
+        if (locked || idleRepeats >= 2) return;
         idleTimer = setTimeout(() => {
-          if (locked || idleRepeats >= 3) return;
+          if (locked || counting()) return;
           idleRepeats++;
-          if (idleRepeats >= 2) helpMore();
-          else prompt();
-        }, IDLE_MS);
+          if (idleRepeats === 1) { showHelp(); armIdle(); }
+          else prompt();              // asks once more; prompt() re-arms, which now stops
+        }, idleRepeats === 0 ? IDLE_HELP_MS : IDLE_REPEAT_MS);
+      }
+
+      // ---- Count with me (only when she asks) ----
+      function showHelp() {
+        if (helpBtn.classList.contains('show')) return;
+        helpBtn.classList.add('show', 'pulse');
+        setTimeout(() => helpBtn.classList.remove('pulse'), 2600);
+      }
+
+      function counting() { return helpBtn.classList.contains('counting'); }
+
+      function stopCount() {
+        countId++;
+        helpBtn.classList.remove('counting');
+        document.querySelectorAll('.block.lit').forEach(b => b.classList.remove('lit'));
+      }
+
+      function countWithMe() {
+        if (locked) return;
+        stopCount();
+        clearTimeout(idleTimer);
+        promptId++;
+        replayBtn.classList.remove('pulse');
+        if (level === 3) { eqEl.classList.add('reveal'); fitBlocks(); }
+        const id = countId, run = runId;
+        helpBtn.classList.add('counting');
+        const blocks = isTake()
+          ? towerA.querySelectorAll('.block:not(.ghost)')
+          : Array.from(towerA.querySelectorAll('.block')).concat(Array.from(towerB.querySelectorAll('.block')));
+        // The tiles stay live: a tap at any point stops the counting and counts as her answer.
+        Count.along(blocks, {
+          alive: () => id === countId && run === runId,
+          onDone: () => {
+            helpBtn.classList.remove('counting');
+            prompt('', 'Find ' + W(answer) + '!');
+          }
+        });
       }
 
       // ---- Drawing ----
@@ -479,6 +548,8 @@
         wrongTaps = 0;
         idleRepeats = 0;
         clearTimeout(idleTimer);
+        stopCount();
+        helpBtn.classList.remove('show', 'pulse');
 
         // reset the stage
         [slotB, opEl].forEach(el => el.classList.remove('gone'));
@@ -538,6 +609,7 @@
       function onTap(tile, n) {
         if (locked) return;
         clearTimeout(idleTimer);
+        stopCount();
 
         if (n === answer) {
           lockTiles(true);
@@ -561,39 +633,16 @@
         setTimeout(() => { if (fadeRun === runId) tile.classList.add('dim'); }, 450);
         GameAudio.nope();
 
-        if (wrongTaps === 1) {
-          if (level === 3) {
-            eqEl.classList.add('reveal');      // numbers only: show the blocks behind them
-            fitBlocks();
-            prompt("That's " + W(n) + '. Look at the blocks! ');
-          } else {
-            prompt("That's " + W(n) + '. Count the blocks! ');
-          }
+        showHelp();
+        if (wrongTaps === 1 && level === 3) {
+          eqEl.classList.add('reveal');        // numbers only: show the blocks behind them
+          fitBlocks();
+          prompt("That's " + W(n) + '. Look at the blocks! ');
+        } else if (wrongTaps === 1) {
+          prompt("That's " + W(n) + '. Count the blocks! ');
         } else {
-          helpMore("That's " + W(n) + ". Let's count!");
+          prompt("That's " + W(n) + '. ');
         }
-      }
-
-      // Count the blocks together, then point at the answer.
-      function helpMore(intro) {
-        if (level === 3) { eqEl.classList.add('reveal'); fitBlocks(); }
-        const run = runId;
-        lockTiles(true);
-        clearTimeout(idleTimer);
-        const blocks = isTake()
-          ? towerA.querySelectorAll('.block:not(.ghost)')
-          : Array.from(towerA.querySelectorAll('.block')).concat(Array.from(towerB.querySelectorAll('.block')));
-        const go = () => Count.along(blocks, {
-          alive: () => run === runId,
-          onDone: () => {
-            lockTiles(false);
-            const t = tilesEl.querySelector('[data-n="' + answer + '"]');
-            if (t) t.classList.add('nudge');
-            prompt('', 'Find ' + W(answer) + '!');
-          }
-        });
-        if (intro) GameAudio.say(intro, { onDone: () => { if (run === runId) go(); } });
-        else go();
       }
 
       // The Numberblocks moment: B hops onto A and they become one number.
@@ -722,8 +771,10 @@
       Tap.on(replayBtn, () => {
         if (locked) return;
         GameAudio.unlock();
+        stopCount();
         prompt();
       });
+      Tap.on(helpBtn, () => { GameAudio.unlock(); countWithMe(); });
       $('fsBtn').addEventListener('click', () => {
         const el = document.documentElement;
         if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
