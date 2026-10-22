@@ -51,6 +51,17 @@
       transform-origin: bottom center;
     }
 
+    /* "Look" rounds: no number is spoken; a tower is the question and fills
+       the space above the tiles. The speaker moves to the side. */
+    .app.look { grid-template-rows: 1fr auto; position: relative; }
+    .app.look .replay { position: absolute; left: 7vw; top: 22%; margin-top: 0; }
+    .app.look .hint {
+      height: 100%;
+      width: 100%;
+      visibility: visible;
+      padding-bottom: 3vmin;
+    }
+
     /* ---------- Answer tiles ---------- */
     .tiles {
       display: flex;
@@ -222,6 +233,7 @@
   <script src="../shared/progress.js"></script>
   <script src="../shared/tap.js"></script>
   <script src="../shared/fx.js"></script>
+  <script src="../shared/count.js"></script>
   <script>
     (function () {
       const ROUNDS_PER_SET = 6;
@@ -233,8 +245,18 @@
       const lineupEl = document.getElementById('lineup');
       const playBtn = document.getElementById('playBtn');
       const fsBtn = document.getElementById('fsBtn');
-      // Dev convenience: ?demo=right shows a solved round, ?demo=party the set finish, ?demo=hint a stuck round.
-      const demo = new URLSearchParams(location.search).get('demo');
+      const appEl = document.querySelector('.app');
+      const params = new URLSearchParams(location.search);
+      // Dev conveniences: ?demo=right|hint|party freezes a state; ?level=2 forces a level.
+      const demo = params.get('demo');
+      const forcedLevel = parseInt(params.get('level'), 10);
+
+      // Levels: 1 hear the number, 2 see a tower and find its number, 3 a mix.
+      const GAME = 'find-me';
+      const MAX_LEVEL = 3;
+      const CLEAN_ROUNDS_TO_ADVANCE = 8;
+      let mode = 'say';           // this round: 'say' (hear it) or 'look' (count it)
+      let runId = 0;              // bumps every round so stale counting callbacks stop
 
       let target = 0;
       let lastTarget = 0;
@@ -257,13 +279,15 @@
         idleTimer = setTimeout(() => {
           if (locked || idleRepeats >= 3) return;
           idleRepeats++;
-          if (idleRepeats >= 2) showHint();
+          if (idleRepeats >= 2) { if (mode === 'look') nudgeTarget(); else showHint(); }
           prompt();
         }, IDLE_MS);
       }
 
       // ---- Speech ----
-      function promptText() { return 'Find ' + Blocks.WORDS[target] + '.'; }
+      function promptText() {
+        return mode === 'look' ? 'How many blocks? Find the number!' : 'Find ' + Blocks.WORDS[target] + '.';
+      }
 
       /** Say (prefix +) "Find six." and pulse the replay button until it finishes. */
       function prompt(prefix) {
@@ -319,11 +343,20 @@
         tile.style.setProperty('--accent', n === 10 ? '#777' : 'var(--c)');
       }
 
+      function currentLevel() {
+        const l = Number.isFinite(forcedLevel) ? forcedLevel : Progress.getLevel(GAME);
+        return Math.max(1, Math.min(MAX_LEVEL, l));
+      }
+
       function newRound(prefix) {
         const max = Progress.range();
         const count = max <= 5 ? 3 : 4;
         target = Progress.pickTarget(Array.from({ length: max }, (_, i) => i + 1), lastTarget);
         lastTarget = target;
+        runId++;
+        const level = currentLevel();
+        mode = level === 1 ? 'say' : level === 2 ? 'look' : (Math.random() < 0.5 ? 'say' : 'look');
+        appEl.classList.toggle('look', mode === 'look');
         locked = false;
         wrongTaps = 0;
         replayTaps = 0;
@@ -340,7 +373,18 @@
           Tap.on(tile, () => { GameAudio.unlock(); onTap(tile, n); });
           tilesEl.appendChild(tile);
         });
+        if (mode === 'look') drawQuestionTower();
         prompt(prefix);
+      }
+
+      // The question in a look round: the target's tower, as big as the space allows.
+      function drawQuestionTower() {
+        const rows = Math.min(target, 10);
+        const room = hintEl.clientHeight - 30;
+        const b = Math.max(14, Math.min(room / (rows + 0.5), 70));
+        hintTower.style.setProperty('--b', b + 'px');
+        Blocks.render(hintTower, target);
+        hintEl.classList.add('show');
       }
 
       // ---- Hints: escalate gently instead of letting her guess forever ----
@@ -351,13 +395,13 @@
       }
 
       function showHint() {
-        if (hintEl.classList.contains('show')) return;
+        if (mode === 'look' || hintEl.classList.contains('show')) return;
         fitTower(hintTower, target, 15, 5);
         hintEl.classList.add('show');
       }
 
       function hideHint() {
-        hintEl.classList.remove('show');
+        if (mode !== 'look') hintEl.classList.remove('show');
         tilesEl.querySelectorAll('.tile.nudge').forEach(t => t.classList.remove('nudge'));
       }
 
@@ -375,6 +419,8 @@
           promptId++;
           replayBtn.classList.remove('pulse');
           Progress.record(target, wrongTaps === 0);
+          Progress.recordLevelRound(GAME, wrongTaps === 0, CLEAN_ROUNDS_TO_ADVANCE, MAX_LEVEL);
+          runId++;                // stops a count-along that is still going
           found.push(target);
           hideHint();
           tile.classList.add('right');
@@ -389,7 +435,8 @@
         }
 
         wrongTaps++;
-        if (!confusedThisRound.has(n)) {
+        // A miscount is not a numeral mix-up, so only "hear it" rounds record pairs.
+        if (mode === 'say' && !confusedThisRound.has(n)) {
           confusedThisRound.add(n);
           Progress.recordConfusion(n, target);
         }
@@ -397,10 +444,25 @@
         void tile.offsetWidth;
         tile.classList.add('wrong');
         // A wrong tile fades out so she narrows down instead of mashing it.
-        setTimeout(() => { if (!locked) tile.classList.add('dim'); }, 450);
+        const fadeRun = runId;
+        setTimeout(() => { if (fadeRun === runId) tile.classList.add('dim'); }, 450);
         GameAudio.nope();
 
-        if (wrongTaps === 1) {
+        if (mode === 'look') {
+          if (wrongTaps === 1) {
+            prompt("That's " + Blocks.WORDS[n] + '. Count the blocks! ');
+          } else {
+            // Second miss: count the tower together, then point at the answer.
+            const run = runId;
+            locked = true;
+            GameAudio.say("That's " + Blocks.WORDS[n] + ". Let's count!", {
+              onDone: () => Count.along(hintTower.querySelectorAll('.block'), {
+                alive: () => run === runId,
+                onDone: () => { locked = false; nudgeTarget(); prompt('Find ' + Blocks.WORDS[target] + '! '); }
+              })
+            });
+          }
+        } else if (wrongTaps === 1) {
           prompt("That's " + Blocks.WORDS[n] + '. ');
         } else {
           // Second miss: show the quantity as a clue and make the right tile bob.
@@ -443,6 +505,7 @@
         locked = true;
         clearTimeout(idleTimer);
         const unlocked = Progress.takeUnlock();
+        const levelUp = Progress.takeLevelUp(GAME);
         const newOnes = [];
         if (unlocked) for (let i = unlocked === 20 ? 11 : 6; i <= unlocked; i++) newOnes.push(i);
         lineup(found, newOnes);
@@ -455,6 +518,8 @@
         setTimeout(() => FX.burst(cx, cy - 40, { count: 50, spread: 400 }), 700);
         GameAudio.say(newOnes.length
           ? 'You found them all! Now some bigger numbers want to play!'
+          : levelUp === 2 ? 'You found them all! Next time, count the blocks to find the number!'
+          : levelUp === 3 ? 'You found them all! Next time, listen or count. Get ready!'
           : 'You found them all!');
       }
 
@@ -482,7 +547,7 @@
         if (locked) return; // not while a round is resolving or before play
         GameAudio.unlock();
         replayTaps++;
-        if (replayTaps >= 2) showHint(); // asked twice: give her the picture too
+        if (replayTaps >= 2) { if (mode === 'look') nudgeTarget(); else showHint(); } // asked twice: help a bit more
         prompt();
       });
       fsBtn.addEventListener('click', () => {

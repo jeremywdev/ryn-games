@@ -27,13 +27,13 @@
     .tiles {
       display: flex;
       flex-wrap: wrap;
-      gap: 5vmin;
+      gap: min(5vmin, 2.5vw);
       justify-content: center;
     }
     /* Picture tiles: big, square, one per game. No reading needed. */
     .tile {
-      width: 40vmin;
-      height: 40vmin;
+      width: min(40vmin, 21vw);
+      height: min(40vmin, 21vw);
       border-radius: 5vmin;
       background: white;
       box-shadow: 0 8px 0 rgba(0,0,0,0.12), 0 12px 24px rgba(0,0,0,0.12);
@@ -68,6 +68,19 @@
     .bond .tower { --b: 5vmin; }
     .bond .plus { font-size: 7vmin; font-weight: 700; color: #999; line-height: 1; padding-bottom: 1vmin; }
 
+    /* Add Up icon: a little tower hopping onto a bigger one. */
+    .hopper { position: relative; display: flex; align-items: flex-end; gap: 4vmin; }
+    .hopper .tower { --b: 5vmin; }
+    .hopper .jumper { transform: translateY(-6vmin) rotate(-12deg); }
+    .hopper .arc {
+      position: absolute;
+      left: 4vmin; bottom: 15vmin;
+      width: 9vmin; height: 5vmin;
+      border: 0.6vmin dashed #bbb;
+      border-color: #bbb transparent transparent transparent;
+      border-radius: 50% 50% 0 0;
+    }
+
     /* Find Me icon: three numeral chips, one found. */
     .chips { display: flex; gap: 1.6vmin; align-items: center; }
     .chip {
@@ -101,8 +114,9 @@
       display: none;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 3vmin;
+      justify-content: safe center;
+      overflow-y: auto;
+      gap: 2.4vmin;
       padding: 4vmin;
       z-index: 30;
       font-size: 2.6vmin;
@@ -162,7 +176,9 @@
     .parent button.danger span { position: relative; }
     .parent button.undo { background: #4aa84a; color: white; }
     .voice-row label, .dim-label { color: #777; }
-    .band-row #bandRow, .band-row #levelRow { display: flex; gap: 1.2vmin; flex-wrap: wrap; justify-content: center; }
+    .band-row .opts { display: flex; gap: 1.2vmin; flex-wrap: wrap; justify-content: center; }
+    .band-row .dim-label { min-width: 13vmin; text-align: right; }
+    .band-row .sep { width: 2vmin; }
     .parent button.band.current { background: #2b2b2b; color: white; }
     .voice-row select {
       font-family: inherit;
@@ -229,6 +245,23 @@
       </div>
       <div class="label">Make Me</div>
     </a>
+    <a class="tile" href="add-up/index.html">
+      <div class="picture">
+        <div class="hopper">
+          <div class="tower"><div class="col">
+            <div class="block" style="--c:#f9d71c"></div>
+            <div class="block" style="--c:#f9d71c"></div>
+            <div class="block" style="--c:#f9d71c"><div class="face"><div class="eye left"><div class="pupil"></div></div><div class="eye right"><div class="pupil"></div></div><div class="mouth"></div></div></div>
+          </div></div>
+          <div class="arc"></div>
+          <div class="tower jumper"><div class="col">
+            <div class="block" style="--c:#f5841f"></div>
+            <div class="block" style="--c:#f5841f"><div class="face"><div class="eye left"><div class="pupil"></div></div><div class="eye right"><div class="pupil"></div></div><div class="mouth"></div></div></div>
+          </div></div>
+        </div>
+      </div>
+      <div class="label">Add Up</div>
+    </a>
   </div>
 
   <div class="parent" id="parent">
@@ -237,20 +270,35 @@
     <div class="grid" id="grid"></div>
     <div class="legend"><span class="g">mostly right</span><span class="o">mixed</span><span class="w">struggling</span><span>green ring = mastered</span></div>
     <div class="row band-row">
-      <span class="dim-label">Ask about</span>
-      <div id="bandRow">
+      <span class="dim-label">Find Me</span>
+      <div class="opts" id="bandRow">
         <button class="band" data-band="5">1 to 5</button>
         <button class="band" data-band="10">1 to 10</button>
         <button class="band" data-band="20">1 to 20</button>
       </div>
+      <span class="sep"></span>
+      <div class="opts level-opts" data-game="find-me">
+        <button class="band" data-level="1">hear it</button>
+        <button class="band" data-level="2">see blocks</button>
+        <button class="band" data-level="3">both</button>
+      </div>
     </div>
     <div class="row band-row">
-      <span class="dim-label">Make Me level</span>
-      <div id="levelRow">
-        <button class="band" data-level="1">1 · make 2 to 5</button>
-        <button class="band" data-level="2">2 · make 6 to 10</button>
-        <button class="band" data-level="3">3 · make ten</button>
-        <button class="band" data-level="4">4 · make teens</button>
+      <span class="dim-label">Make Me</span>
+      <div class="opts level-opts" data-game="make-me">
+        <button class="band" data-level="1">make 2 to 5</button>
+        <button class="band" data-level="2">make 6 to 10</button>
+        <button class="band" data-level="3">make ten</button>
+        <button class="band" data-level="4">make teens</button>
+      </div>
+    </div>
+    <div class="row band-row">
+      <span class="dim-label">Add Up</span>
+      <div class="opts level-opts" data-game="add-up">
+        <button class="band" data-level="1">to 10</button>
+        <button class="band" data-level="2">to 20</button>
+        <button class="band" data-level="3">numbers only</button>
+        <button class="band" data-level="4">take away</button>
       </div>
     </div>
     <div class="row voice-row">
@@ -277,7 +325,7 @@
 
       const parentEl = document.getElementById('parent');
       const bandRow = document.getElementById('bandRow');
-      const levelRow = document.getElementById('levelRow');
+      const levelRows = document.querySelectorAll('.level-opts');
       const voiceSel = document.getElementById('voiceSel');
       const tryVoiceBtn = document.getElementById('tryVoiceBtn');
 
@@ -336,8 +384,10 @@
         rangeLine.innerHTML = 'Find Me is asking about 1 to ' + band + '. It widens on its own once every number in the band is found first try twice in a row.<br>' +
           'Score is first-try right / times asked. A mix-up is tapping that number when a different one was asked for.';
         bandRow.querySelectorAll('.band').forEach(b => b.classList.toggle('current', Number(b.dataset.band) === band));
-        const lvl = Progress.getLevel('make-me');
-        levelRow.querySelectorAll('.band').forEach(b => b.classList.toggle('current', Number(b.dataset.level) === lvl));
+        levelRows.forEach(row => {
+          const lvl = Progress.getLevel(row.dataset.game);
+          row.querySelectorAll('.band').forEach(b => b.classList.toggle('current', Number(b.dataset.level) === lvl));
+        });
         undoBtn.hidden = !Progress.canUndoReset();
         renderVoices();
       }
@@ -374,12 +424,12 @@
         Progress.setBand(Number(b.dataset.band));
         renderParent();
       });
-      levelRow.addEventListener('click', e => {
+      levelRows.forEach(row => row.addEventListener('click', e => {
         const b = e.target.closest('.band');
         if (!b) return;
-        Progress.setLevel('make-me', Number(b.dataset.level));
+        Progress.setLevel(row.dataset.game, Number(b.dataset.level));
         renderParent();
-      });
+      }));
       document.getElementById('closeBtn').addEventListener('click', () => parentEl.classList.remove('show'));
       // Dev convenience: index.html?parent=1 opens the grown-up corner directly.
       if (new URLSearchParams(location.search).get('parent')) { renderParent(); parentEl.classList.add('show'); }

@@ -65,6 +65,13 @@
   }
 }
 .block.pop { animation: block-popin 0.3s cubic-bezier(.3, 1.6, .5, 1); }
+/* the block being counted aloud (shared/count.js) */
+.block.lit {
+  z-index: 2;
+  transform: scale(1.12);
+  box-shadow: 0 0 0 calc(var(--b) * 0.08) #fff, 0 0 calc(var(--b) * 0.35) calc(var(--b) * 0.1) rgba(255, 200, 0, 0.9);
+  transition: transform 0.12s;
+}
 .block.ghost {
   background: transparent;
   border: 3px dashed rgba(0, 0, 0, 0.18);

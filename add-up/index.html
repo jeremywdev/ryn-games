@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Add Up</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/blocks.css">
+  <style>
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 2vmin 3vmin 3vmin;
+      min-height: 0;
+    }
+
+    /* ---------- Stage: speaker on the left, the sum in the middle ---------- */
+    .stage {
+      display: grid;
+      grid-template-columns: 20vmin 1fr;
+      align-items: center;
+      min-height: 0;
+    }
+    .replay {
+      width: 16vmin;
+      height: 16vmin;
+      border-radius: 50%;
+      background: #f5841f;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.08s;
+    }
+    .replay:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+    .replay svg { width: 55%; height: 55%; fill: white; }
+    .replay.pulse { animation: pulse 1.2s ease-in-out infinite; }
+
+    /* A + B = ?   Each operand is a slot: its tower above, its numeral below. */
+    .eq {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 3vmin;
+      padding-top: 2vmin;
+    }
+    .slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 14vmin;
+    }
+    .slot .tower {
+      border-bottom: 5px solid rgba(0,0,0,0.12);
+      transform-origin: bottom center;
+    }
+    .slot .tower.celebrate { animation: wiggle 0.7s ease-in-out; }
+    .slot .tower.celebrate .mouth { height: 22%; background: var(--ink); }
+    .slot .n {
+      --c: #999;
+      font-size: 10vmin;
+      font-weight: 700;
+      line-height: 1;
+      margin-top: 1.2vmin;
+      color: var(--c);
+      -webkit-text-stroke: 0.35vmin rgba(0,0,0,0.4);
+    }
+    .op {
+      align-self: center;
+      font-size: 12vmin;
+      font-weight: 700;
+      color: #9a9a9a;
+      line-height: 1;
+      transition: opacity 0.3s;
+    }
+    .gone { visibility: hidden; }
+    .answer {
+      align-self: center;
+      width: 20vmin;
+      height: 20vmin;
+      border-radius: 4vmin;
+      border: 1vmin dashed rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13vmin;
+      font-weight: 700;
+      color: #b5b5b5;
+    }
+    .answer.solved {
+      --c: #999;
+      border-style: solid;
+      border-color: var(--c);
+      background: white;
+      color: var(--c);
+      -webkit-text-stroke: 0.35vmin rgba(0,0,0,0.4);
+      animation: found 0.55s cubic-bezier(.3,1.6,.5,1);
+    }
+
+    /* Level 3, numbers only: big numerals, towers hidden until a hint. */
+    .eq.numerals:not(.reveal) .slot .tower { display: none; }
+    .eq.numerals:not(.reveal) .slot { justify-content: center; }
+    .eq.numerals:not(.reveal) .slot .n { font-size: 26vmin; margin-top: 0; }
+
+    /* Take-away: the number taken away is a numeral only, centred like the signs. */
+    .eq.take #slotB { justify-content: center; }
+    .eq.take #slotB .tower { display: none; }
+    .eq.take #slotB .n { font-size: 16vmin; margin-top: 0; }
+
+    /* Take-away: the blocks that leave turn into dashed ghosts. */
+    .slot .block.ghost {
+      border: 3px dashed rgba(0,0,0,0.25);
+      background: transparent;
+      box-shadow: none;
+    }
+    .slot .block.ghost::before { display: none; }
+    .slot .block.leaving { animation: pop-off 0.32s ease-in; }
+
+    /* ---------- Answer tiles ---------- */
+    .tiles {
+      display: flex;
+      gap: 3vmin;
+      justify-content: center;
+      padding-top: 2vmin;
+    }
+    .tile {
+      --c: #999;
+      width: 19vmin;
+      height: 19vmin;
+      border-radius: 3.5vmin;
+      background: var(--c);
+      border: 1vmin solid transparent;
+      color: white;
+      font-size: 12vmin;
+      font-weight: 700;
+      line-height: 1;
+      text-shadow: 0 0.5vmin 0 rgba(0,0,0,0.3);
+      box-shadow: 0 1vmin 0 rgba(0,0,0,0.18), 0 1.2vmin 2.4vmin rgba(0,0,0,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.12s, opacity 0.4s, box-shadow 0.12s;
+    }
+    .tile:active { transform: translateY(0.6vmin); box-shadow: 0 0.4vmin 0 rgba(0,0,0,0.18); }
+    .tile.light { color: #333; text-shadow: 0 0.3vmin 0 rgba(255,255,255,0.6); }
+    .tile.teen { background: #f7f7f7; }
+    .tile.rainbow { background: linear-gradient(135deg,#e4322b,#f5841f,#f9d71c,#4aa84a,#37b3e3,#5c3ba6,#9b4dcf); }
+    .tile.wrong { animation: shake 0.45s ease-in-out; }
+    .tile.dim { opacity: 0.25; pointer-events: none; }
+    .tile.nudge { animation: nudge 0.9s ease-in-out infinite; }
+    .tile.right { animation: found 0.55s cubic-bezier(.3,1.6,.5,1) forwards; pointer-events: none; }
+    .tiles.locked .tile { pointer-events: none; }
+
+    /* ---------- Start / end-of-set overlay ---------- */
+    .party {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6vmin;
+      z-index: 20;
+    }
+    .party.show { display: flex; }
+    .party .lineup {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5vmin;
+      border-bottom: 6px solid rgba(0,0,0,0.12);
+      padding: 0 4vmin;
+      max-width: 94vw;
+    }
+    .party .lineup .tower { animation: hop 0.9s ease-in-out infinite; transform-origin: bottom center; }
+    .play {
+      width: 22vmin;
+      height: 22vmin;
+      border-radius: 50%;
+      background: #4aa84a;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .play::after {
+      content: '';
+      position: absolute;
+      left: 56%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-left: 9vmin solid white;
+      border-top: 6vmin solid transparent;
+      border-bottom: 6vmin solid transparent;
+    }
+    .play:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+
+    @keyframes found {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.2) rotate(-3deg); }
+      70%  { transform: scale(1.05) rotate(2deg); }
+      100% { transform: scale(1.08) rotate(0); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-2vmin) rotate(-3deg); }
+      40% { transform: translateX(2vmin) rotate(3deg); }
+      60% { transform: translateX(-1.5vmin) rotate(-2deg); }
+      80% { transform: translateX(1.5vmin) rotate(2deg); }
+    }
+    @keyframes nudge {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-1.5vmin) scale(1.04); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(0); }
+      20% { transform: rotate(-4deg) translateY(-6px); }
+      40% { transform: rotate(4deg) translateY(-10px); }
+      60% { transform: rotate(-3deg) translateY(-6px); }
+      80% { transform: rotate(3deg) translateY(-2px); }
+    }
+    @keyframes hop {
+      0%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-2vmin) scaleY(1.05); }
+      50% { transform: translateY(0) scaleY(0.95); }
+    }
+    @keyframes pop-off {
+      0%   { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(calc(var(--b) * -0.8)) scale(0.4); opacity: 0; }
+    }
+
+    @media (orientation: portrait) {
+      .stage { grid-template-columns: 1fr; grid-template-rows: auto 1fr; justify-items: center; }
+      .tiles { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <a class="corner-btn home" href="../index.html" aria-label="Home">&#8962;</a>
+  <button class="corner-btn fullscreen" id="fsBtn" aria-label="Fullscreen">&#x26F6;</button>
+
+  <div class="app">
+    <div class="stage">
+      <button class="replay" id="replayBtn" aria-label="Say it again">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
+        </svg>
+      </button>
+      <div class="eq" id="eq">
+        <div class="slot" id="slotA"><div class="tower" id="towerA"></div><div class="n" id="nA"></div></div>
+        <div class="op" id="op">+</div>
+        <div class="slot" id="slotB"><div class="tower" id="towerB"></div><div class="n" id="nB"></div></div>
+        <div class="op" id="eqSign">=</div>
+        <div class="answer" id="answer">?</div>
+      </div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+
+  <div class="party" id="party">
+    <div class="lineup" id="lineup"></div>
+    <button class="play" id="playBtn" aria-label="Play"></button>
+  </div>
+
+  <script src="../shared/blocks.js"></script>
+  <script src="../shared/audio.js"></script>
+  <script src="../shared/progress.js"></script>
+  <script src="../shared/tap.js"></script>
+  <script src="../shared/fx.js"></script>
+  <script src="../shared/count.js"></script>
+  <script>
+    (function () {
+      const GAME = 'add-up';
+      const MAX_LEVEL = 4;
+      const CLEAN_ROUNDS_TO_ADVANCE = 5;
+      const ROUNDS_PER_SET = 5;
+      const IDLE_MS = 10000;
+      const CHEERS = ['Yes!', 'Hooray!', "That's it!", 'Wow!', 'Super!', 'You got it!'];
+
+      const $ = id => document.getElementById(id);
+      const eqEl = $('eq'), towerA = $('towerA'), towerB = $('towerB'), nA = $('nA'), nB = $('nB');
+      const slotB = $('slotB'), opEl = $('op'), answerEl = $('answer');
+      const tilesEl = $('tiles'), replayBtn = $('replayBtn');
+      const partyEl = $('party'), lineupEl = $('lineup'), playBtn = $('playBtn');
+      const params = new URLSearchParams(location.search);
+      // Dev conveniences: ?level=3 forces a level; ?demo=fresh|hint|done|party freezes a state.
+      const demo = params.get('demo');
+      const forcedLevel = parseInt(params.get('level'), 10);
+
+      // Levels: 1 add, totals to 10, with blocks   2 add, totals 11-20, with blocks
+      //         3 add, totals to 10, numbers only   4 take away, from up to 10
+      let level = 1;
+      let a = 0, b = 0, answer = 0;
+      let lastKey = '';
+      let locked = true;
+      let wrongTaps = 0;
+      let roundsDone = 0;
+      let solved = [];
+      let runId = 0;
+      let promptId = 0;
+      let idleTimer = null;
+      let idleRepeats = 0;
+
+      const W = n => Blocks.WORDS[n];
+      const isTake = () => level === 4;
+
+      // ---- Problems ----
+      function problemPool(lvl) {
+        const pool = [];
+        if (lvl === 1 || lvl === 3) {
+          for (let x = 1; x <= 9; x++) for (let y = 1; x + y <= 10; y++) pool.push(x + '+' + y);
+        } else if (lvl === 2) {
+          for (let x = 2; x <= 10; x++) for (let y = 1; y <= 10; y++) if (x + y >= 11 && x + y <= 20) pool.push(x + '+' + y);
+        } else {
+          for (let x = 3; x <= 10; x++) for (let y = 1; y < x; y++) pool.push(x + '-' + y);
+        }
+        return pool;
+      }
+
+      function planRound() {
+        level = Number.isFinite(forcedLevel) ? forcedLevel : Progress.getLevel(GAME);
+        level = Math.max(1, Math.min(MAX_LEVEL, level));
+        // A shuffled bag: every problem comes up once before any repeats.
+        const key = Progress.pickTarget(problemPool(level), lastKey, () => 1);
+        lastKey = key;
+        const take = key.indexOf('-') > 0;
+        const [x, y] = key.split(take ? '-' : '+').map(Number);
+        a = x; b = y;
+        answer = take ? a - b : a + b;
+      }
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      // Distractors: a neighbour of the answer, the classic slip of answering
+      // with one of the numbers in the question, then random fill.
+      function pickChoices() {
+        const top = level === 2 ? 20 : 10;
+        const ok = n => n >= 1 && n <= top && n !== answer;
+        const picks = new Set();
+        const nb = shuffle([answer - 1, answer + 1].filter(ok));
+        if (nb.length) picks.add(nb[0]);
+        const slip = shuffle([a, b].filter(ok));
+        if (slip.length) picks.add(slip[0]);
+        const lo = Math.max(1, answer - 4), hi = Math.min(top, answer + 4);
+        const fill = [];
+        for (let i = lo; i <= hi; i++) if (ok(i) && !picks.has(i)) fill.push(i);
+        shuffle(fill).forEach(n => { if (picks.size < 3) picks.add(n); });
+        for (let i = 1; picks.size < 3 && i <= top; i++) if (ok(i)) picks.add(i);
+        return shuffle([answer, ...picks]);
+      }
+
+      // ---- Speech ----
+      function questionText() {
+        return isTake()
+          ? W(a) + ' take away ' + W(b) + '. How many are left?'
+          : W(a) + ' and ' + W(b) + ' make how many?';
+      }
+      function answerText() {
+        return isTake()
+          ? W(a) + ' take away ' + W(b) + ' is ' + W(answer) + '!'
+          : W(a) + ' and ' + W(b) + ' make ' + Blocks.phrase(answer);
+      }
+
+      function prompt(prefix, text) {
+        const id = ++promptId;
+        replayBtn.classList.add('pulse');
+        GameAudio.say((prefix || '') + (text || questionText()), {
+          onEnd: () => { if (id === promptId) replayBtn.classList.remove('pulse'); }
+        });
+        armIdle();
+      }
+
+      function armIdle() {
+        clearTimeout(idleTimer);
+        if (locked) return;
+        idleTimer = setTimeout(() => {
+          if (locked || idleRepeats >= 3) return;
+          idleRepeats++;
+          if (idleRepeats >= 2) helpMore();
+          else prompt();
+        }, IDLE_MS);
+      }
+
+      // ---- Drawing ----
+      function setNumeral(el, n) {
+        el.textContent = n;
+        el.style.setProperty('--c', n === 10 ? '#8c8c8c' : n > 10 ? Blocks.onesColor(n) || '#8c8c8c' : Blocks.numberColor(n));
+      }
+
+      // One block size for the whole round, so nothing jumps when towers merge.
+      function fitBlocks() {
+        const tallest = isTake() ? a : Math.min(answer, 10);
+        const room = eqEl.clientHeight - nA.offsetHeight - 40;
+        const width = eqEl.clientWidth / 9;
+        const size = Math.max(14, Math.min(room / (tallest + 0.6), width, 64));
+        eqEl.style.setProperty('--b', size + 'px');
+      }
+
+      // Take-away: draw `total` blocks in total's colours, the top ones as ghosts.
+      function renderWithGhosts(el, total, keep) {
+        el.innerHTML = '';
+        const col = document.createElement('div');
+        col.className = 'col';
+        for (let r = 0; r < total; r++) {
+          const block = document.createElement('div');
+          block.className = 'block';
+          if (r < keep) {
+            const c = Blocks.blockColor(total, r);
+            block.style.setProperty('--c', c);
+            if (Blocks.isLight(c)) block.classList.add('light');
+            if (r === keep - 1) block.appendChild(makeFace());
+          } else {
+            block.classList.add('ghost');
+          }
+          col.appendChild(block);
+        }
+        el.appendChild(col);
+      }
+
+      function makeFace() {
+        const face = document.createElement('div');
+        face.className = 'face';
+        face.innerHTML =
+          '<div class="eye left"><div class="pupil"></div></div>' +
+          '<div class="eye right"><div class="pupil"></div></div>' +
+          '<div class="mouth"></div>';
+        return face;
+      }
+
+      function styleTile(tile, n) {
+        tile.className = 'tile';
+        if (n === 7) tile.classList.add('rainbow');
+        else if (n > 10) {
+          tile.classList.add('teen', 'light');
+          tile.style.borderColor = n === 20 ? '#8c8c8c' : Blocks.numberColor(n - 10);
+        } else {
+          const c = Blocks.numberColor(n);
+          tile.style.setProperty('--c', c);
+          if (Blocks.isLight(c)) tile.classList.add('light');
+        }
+      }
+
+      function renderTiles() {
+        tilesEl.innerHTML = '';
+        tilesEl.classList.remove('locked');
+        pickChoices().forEach(n => {
+          const tile = document.createElement('button');
+          styleTile(tile, n);
+          tile.textContent = n;
+          tile.dataset.n = n;
+          Tap.on(tile, () => { GameAudio.unlock(); onTap(tile, n); });
+          tilesEl.appendChild(tile);
+        });
+      }
+
+      function lockTiles(on) {
+        locked = on;
+        tilesEl.classList.toggle('locked', on);
+      }
+
+      // ---- Round flow ----
+      function newRound(prefix) {
+        const run = ++runId;
+        planRound();
+        wrongTaps = 0;
+        idleRepeats = 0;
+        clearTimeout(idleTimer);
+
+        // reset the stage
+        [slotB, opEl].forEach(el => el.classList.remove('gone'));
+        towerB.getAnimations().forEach(an => an.cancel());
+        eqEl.classList.toggle('numerals', level === 3);
+        eqEl.classList.toggle('take', isTake());
+        eqEl.classList.remove('reveal');
+        opEl.textContent = isTake() ? '−' : '+';
+        answerEl.className = 'answer';
+        answerEl.textContent = '?';
+        setNumeral(nA, a);
+        setNumeral(nB, b);
+        fitBlocks();
+        Blocks.render(towerA, a);
+        if (isTake()) {
+          towerB.innerHTML = '';              // the number taken away is shown as a numeral only
+        } else {
+          Blocks.render(towerB, b);
+        }
+        renderTiles();
+
+        if (!isTake()) {
+          lockTiles(false);
+          prompt(prefix);
+          return;
+        }
+
+        // Take-away: say it, then the blocks leave one at a time while she counts them off.
+        lockTiles(true);
+        GameAudio.say((prefix || '') + W(a) + '. Take away ' + W(b) + '!', {
+          onDone: () => takeAwayStep(run, 1)
+        });
+      }
+
+      function takeAwayStep(run, i) {
+        if (run !== runId) return;
+        if (i > b) {
+          setTimeout(() => {
+            if (run !== runId) return;
+            lockTiles(false);
+            prompt('', 'How many are left?');
+          }, 300);
+          return;
+        }
+        const blocks = towerA.querySelectorAll('.block');
+        const leaving = blocks[a - i];
+        leaving.classList.add('leaving');
+        GameAudio.unpop(a - i);
+        setTimeout(() => {
+          if (run !== runId) return;
+          renderWithGhosts(towerA, a, a - i);
+          GameAudio.say(W(i), { onDone: () => setTimeout(() => takeAwayStep(run, i + 1), 150) });
+        }, 300);
+      }
+
+      // ---- Answers ----
+      function onTap(tile, n) {
+        if (locked) return;
+        clearTimeout(idleTimer);
+
+        if (n === answer) {
+          lockTiles(true);
+          const run = ++runId;
+          promptId++;
+          replayBtn.classList.remove('pulse');
+          tile.classList.add('right');
+          tilesEl.querySelectorAll('.tile').forEach(t => { if (t !== tile) t.classList.add('dim'); });
+          Progress.recordLevelRound(GAME, wrongTaps === 0, CLEAN_ROUNDS_TO_ADVANCE, MAX_LEVEL);
+          solved.push(answer);
+          if (isTake()) finishTake(run);
+          else merge(run);
+          return;
+        }
+
+        wrongTaps++;
+        tile.classList.remove('wrong');
+        void tile.offsetWidth;
+        tile.classList.add('wrong');
+        const fadeRun = runId;
+        setTimeout(() => { if (fadeRun === runId) tile.classList.add('dim'); }, 450);
+        GameAudio.nope();
+
+        if (wrongTaps === 1) {
+          if (level === 3) {
+            eqEl.classList.add('reveal');      // numbers only: show the blocks behind them
+            fitBlocks();
+            prompt("That's " + W(n) + '. Look at the blocks! ');
+          } else {
+            prompt("That's " + W(n) + '. Count the blocks! ');
+          }
+        } else {
+          helpMore("That's " + W(n) + ". Let's count!");
+        }
+      }
+
+      // Count the blocks together, then point at the answer.
+      function helpMore(intro) {
+        if (level === 3) { eqEl.classList.add('reveal'); fitBlocks(); }
+        const run = runId;
+        lockTiles(true);
+        clearTimeout(idleTimer);
+        const blocks = isTake()
+          ? towerA.querySelectorAll('.block:not(.ghost)')
+          : Array.from(towerA.querySelectorAll('.block')).concat(Array.from(towerB.querySelectorAll('.block')));
+        const go = () => Count.along(blocks, {
+          alive: () => run === runId,
+          onDone: () => {
+            lockTiles(false);
+            const t = tilesEl.querySelector('[data-n="' + answer + '"]');
+            if (t) t.classList.add('nudge');
+            prompt('', 'Find ' + W(answer) + '!');
+          }
+        });
+        if (intro) GameAudio.say(intro, { onDone: () => { if (run === runId) go(); } });
+        else go();
+      }
+
+      // The Numberblocks moment: B hops onto A and they become one number.
+      function merge(run) {
+        if (level === 3) { eqEl.classList.add('reveal'); fitBlocks(); }
+        // Measuring forces layout, so a just-revealed tower is already placed.
+        // A timer rather than requestAnimationFrame, which a throttled tab can hold back.
+        setTimeout(() => {
+          if (run !== runId) return;
+          const ra = towerA.getBoundingClientRect();
+          const rb = towerB.getBoundingClientRect();
+          const size = parseFloat(getComputedStyle(eqEl).getPropertyValue('--b')) || 40;
+          // Up to ten, B lands on A's head. Past ten it would leave the screen,
+          // so it lands beside A instead and the pair regroups as ten and some.
+          const onTop = answer <= 10;
+          const dx = onTop ? (ra.left + ra.width / 2) - (rb.left + rb.width / 2) : (ra.right + size * 0.1) - rb.left;
+          const dy = onTop ? (ra.top - rb.bottom + 5) : 0;
+          const lift = Math.max(size * 2.5, 80);
+          GameAudio.pop(answer);
+          opEl.classList.add('gone');
+          const hop = towerB.animate([
+            { transform: 'translate(0, 0)' },
+            { transform: 'translate(' + dx * 0.5 + 'px, ' + (Math.min(dy, 0) - lift) + 'px)', offset: 0.5 },
+            { transform: 'translate(' + dx + 'px, ' + dy + 'px)' }
+          ], { duration: 650, easing: 'ease-in-out', fill: 'forwards' });
+          // Land when the hop finishes, or after its duration if the finish event never comes.
+          let landed = false;
+          const land = () => {
+            if (landed || run !== runId) return;
+            landed = true;
+            slotB.classList.add('gone');
+            Blocks.render(towerA, answer);
+            setNumeral(nA, answer);
+            towerA.classList.remove('celebrate');
+            void towerA.offsetWidth;
+            towerA.classList.add('celebrate');
+            setTimeout(() => towerA.classList.remove('celebrate'), 800);
+            celebrate(run);
+          };
+          hop.onfinish = land;
+          setTimeout(land, 720);
+        }, 30);
+      }
+
+      function finishTake(run) {
+        Blocks.render(towerA, answer);        // what is left becomes its own number
+        setNumeral(nA, a);
+        towerA.classList.add('celebrate');
+        setTimeout(() => towerA.classList.remove('celebrate'), 800);
+        celebrate(run);
+      }
+
+      function celebrate(run) {
+        answerEl.className = 'answer solved';
+        answerEl.textContent = answer;
+        answerEl.style.setProperty('--c', answer === 10 ? '#8c8c8c' : answer > 10 ? Blocks.onesColor(answer) || '#8c8c8c' : Blocks.numberColor(answer));
+        GameAudio.chime();
+        FX.burstFrom(towerA, { spread: 260 });
+        const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+        GameAudio.say(cheer + ' ' + answerText(), {
+          onDone: () => setTimeout(() => { if (run === runId) nextRound(); }, 800)
+        });
+      }
+
+      function nextRound() {
+        if (demo) return;
+        roundsDone++;
+        if (roundsDone >= ROUNDS_PER_SET) { endSet(); return; }
+        newRound();
+      }
+
+      // ---- Start / end of set ----
+      function lineup(numbers) {
+        lineupEl.innerHTML = '';
+        const cols = numbers.reduce((s, n) => s + Blocks.columns(n).length, 0);
+        const size = Math.max(1.5, Math.min(3.2, 70 / (Math.max(cols, 1) * 1.45)));
+        numbers.forEach((n, i) => {
+          const t = document.createElement('div');
+          t.className = 'tower';
+          t.style.setProperty('--b', size + 'vmin');
+          t.style.animationDelay = (i * 0.12) + 's';
+          Blocks.render(t, n);
+          lineupEl.appendChild(t);
+        });
+      }
+
+      function endSet() {
+        lockTiles(true);
+        clearTimeout(idleTimer);
+        const up = Progress.takeLevelUp(GAME);
+        lineup(solved);
+        partyEl.classList.add('show');
+        GameAudio.chime();
+        setTimeout(() => GameAudio.chime(), 350);
+        const cx = window.innerWidth / 2, cy = window.innerHeight * 0.38;
+        FX.burst(cx - window.innerWidth * 0.18, cy, { count: 40, spread: 320 });
+        setTimeout(() => FX.burst(cx + window.innerWidth * 0.18, cy, { count: 40, spread: 320 }), 300);
+        setTimeout(() => FX.burst(cx, cy - 40, { count: 50, spread: 400 }), 700);
+        const next = {
+          2: 'Next time, bigger numbers!',
+          3: 'Next time, just the numbers. You can do it!',
+          4: 'Next time, some blocks go away!'
+        }[up];
+        GameAudio.say('You did them all!' + (next ? ' ' + next : ''));
+      }
+
+      function startSet(prefix) {
+        partyEl.classList.remove('show');
+        roundsDone = 0;
+        solved = [];
+        newRound(prefix);
+      }
+
+      function showStart() {
+        lineup([2, 3, 5]);
+        partyEl.classList.add('show');
+      }
+
+      // ---- Wire up ----
+      let started = false;
+      Tap.on(playBtn, () => {
+        GameAudio.unlock();
+        startSet(started ? '' : "Let's add some numbers! ");
+        started = true;
+      });
+      Tap.on(replayBtn, () => {
+        if (locked) return;
+        GameAudio.unlock();
+        prompt();
+      });
+      $('fsBtn').addEventListener('click', () => {
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      });
+      window.addEventListener('resize', () => { if (a) fitBlocks(); });
+      document.addEventListener('contextmenu', e => e.preventDefault());
+
+      GameAudio.ready(() => {
+        showStart();
+        if (!demo) return;
+        startSet('');
+        if (demo === 'hint') {
+          const wrong = Array.from(tilesEl.querySelectorAll('.tile')).find(t => Number(t.dataset.n) !== answer);
+          if (wrong) { locked = false; onTap(wrong, Number(wrong.dataset.n)); }
+        } else if (demo === 'done') {
+          const right = tilesEl.querySelector('[data-n="' + answer + '"]');
+          locked = false;
+          if (right) onTap(right, answer);
+        } else if (demo === 'party') {
+          solved = [5, 8, 13, 4, 10];
+          endSet();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
