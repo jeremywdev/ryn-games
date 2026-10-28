@@ -95,6 +95,7 @@
 
   // See the 'not-allowed' handling in say(): the last refused line is retried on release.
   let retryOnRelease = null;
+  let blockedHandler = null;   // told when a line is refused, e.g. to show a "tap to start" button
   document.addEventListener('pointerup', () => {
     unlock();
     const r = retryOnRelease;
@@ -182,6 +183,7 @@
       // Refused for lack of a user gesture (taps fire on contact, activation
       // arrives on release): say it again the moment the finger lifts.
       if (code === 'not-allowed' && !opts._retried) {
+        if (blockedHandler) blockedHandler();
         finished = true;
         clear();
         retryOnRelease = () => say(text, Object.assign({}, opts, { _retried: true }));
@@ -263,8 +265,11 @@
     say('Fourteen! Ten and four. Find six.');
   }
 
+  /** fn() is called whenever the browser refuses to speak until the next tap. */
+  function onBlocked(fn) { blockedHandler = fn; }
+
   window.GameAudio = {
-    unlock, ready, say, preview, voices, setVoice, currentVoiceName, savedVoiceName,
+    unlock, ready, say, preview, voices, setVoice, currentVoiceName, savedVoiceName, onBlocked,
     pop, unpop, chime, nope, setEnabled, get enabled() { return enabled; }
   };
 })();

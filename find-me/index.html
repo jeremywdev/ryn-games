@@ -260,6 +260,7 @@
   <script src="../shared/tap.js"></script>
   <script src="../shared/fx.js"></script>
   <script src="../shared/count.js"></script>
+  <script src="../shared/gate.js"></script>
   <script>
     (function () {
       const ROUNDS_PER_SET = 6;
@@ -596,13 +597,8 @@
         newRound(prefix);
       }
 
-      function showStart() {
-        lineup([1, 2, 3], []);
-        partyEl.classList.add('show');
-      }
-
       // ---- Wire up ----
-      // The play button is the first tap: it unlocks sound and speech for the rest of the visit.
+      // The play button lives on the celebration screen: it starts the next set.
       let started = false;
       Tap.on(playBtn, () => {
         GameAudio.unlock();
@@ -624,9 +620,14 @@
       });
       document.addEventListener('contextmenu', e => e.preventDefault());
 
+      // Open straight onto the first round. If the browser won't talk before a
+      // tap, gate.js covers the game with a play button until she taps once.
       GameAudio.ready(() => {
-        showStart();
-        if (!demo) return;
+        if (!demo) {
+          started = true;
+          startSet("Let's find some numbers! ");
+          return;
+        }
         startSet('');
         const t = tilesEl.querySelector('[data-n="' + target + '"]');
         if (demo === 'right' && t) {

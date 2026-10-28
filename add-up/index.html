@@ -304,6 +304,7 @@
   <script src="../shared/tap.js"></script>
   <script src="../shared/fx.js"></script>
   <script src="../shared/count.js"></script>
+  <script src="../shared/gate.js"></script>
   <script>
     (function () {
       const GAME = 'add-up';
@@ -756,11 +757,6 @@
         newRound(prefix);
       }
 
-      function showStart() {
-        lineup([2, 3, 5]);
-        partyEl.classList.add('show');
-      }
-
       // ---- Wire up ----
       let started = false;
       Tap.on(playBtn, () => {
@@ -781,10 +777,16 @@
       });
       window.addEventListener('resize', () => { if (a) fitBlocks(); });
       document.addEventListener('contextmenu', e => e.preventDefault());
+      document.fonts && document.fonts.ready.then(() => { if (a) fitBlocks(); });
 
+      // Open straight onto the first round. If the browser won't talk before a
+      // tap, gate.js covers the game with a play button until she taps once.
       GameAudio.ready(() => {
-        showStart();
-        if (!demo) return;
+        if (!demo) {
+          started = true;
+          startSet("Let's add some numbers! ");
+          return;
+        }
         startSet('');
         if (demo === 'hint') {
           const wrong = Array.from(tilesEl.querySelectorAll('.tile')).find(t => Number(t.dataset.n) !== answer);

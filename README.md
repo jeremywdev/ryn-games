@@ -37,12 +37,13 @@ Tap the corner button on any game to go fullscreen. The house button goes home.
 - `shared/blocks.css` — the polished block look and the face, shared by every page.
 - `shared/tap.js` — buttons fire on first contact, not on release, because small fingers drag after touching.
 - `shared/fx.js` — confetti and stars for right answers.
+- `shared/gate.js` — games open straight onto the first round. If the browser won't talk before a tap, a play button covers the game until one tap; a page restored by a back swipe reloads, so a finished celebration never reappears.
 - `shared/count.js` — lights blocks one at a time while saying their numbers; the "let's count" hint.
 - `shared/progress.js` — per-numeral memory in localStorage: first-try hits and misses per round, streaks, mix-ups, and which numbers get confused with which. Drives which numbers quiz games ask, which distractors appear, and when the range widens (1-5, then 1-10, then 1-20; it never narrows on its own). A number is mastered after two first-try hits in a row.
 - `block-buddy/` — the sandbox: plus, minus, and a 1 to 20 keypad that builds the number while counting aloud.
 - `make-me/` — a target outline and a row of small towers; she taps parts into the outline while the voice counts on, and the parts become the whole number. Levels: make 2-5, make 6-10, make ten from a start, make a teen from ten. Five clean rounds advance a level.
 - `add-up/` — "three and four make how many?" She taps the answer and the second tower hops onto the first, becoming one number. Levels: totals to 10 with blocks, totals 11-20, numbers only (blocks appear after a miss), and take away (blocks pop off, how many are left). After a miss, or 20 quiet seconds, a "123" button appears; tapping it lights and counts the blocks aloud. Counting never starts on its own, and the answer tiles stay tappable while it counts. Five clean rounds advance a level.
-- `find-me/` — levels: hear it (the voice says a number), see blocks (a tower is shown and no number is spoken), or both mixed. See-blocks rounds use the same opt-in "123" counting button. Eight clean rounds advance a level. A play button starts a set; she taps the answer among three or four. A wrong tile fades out; after a second miss the target's blocks appear as a hint and the right tile bobs. Six rounds per set, then a celebration, with a bigger one when the range widens.
+- `find-me/` — levels: hear it (the voice says a number), see blocks (a tower is shown and no number is spoken), or both mixed. See-blocks rounds use the same opt-in "123" counting button. Eight clean rounds advance a level. She taps the answer among three or four. A wrong tile fades out; after a second miss the target's blocks appear as a hint and the right tile bobs. Six rounds per set, then a celebration, with a bigger one when the range widens.
 
 ## Grown-up corner
 
