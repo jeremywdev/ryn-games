@@ -81,6 +81,21 @@
       border-radius: 50% 50% 0 0;
     }
 
+    /* Count On icon: a closed box with a numeral, and one block hopping in. */
+    .cbox { display: flex; align-items: flex-end; gap: 2vmin; }
+    .cbox .lidicon {
+      width: 13vmin; height: 12vmin; border-radius: 1.6vmin;
+      background: linear-gradient(170deg, #e7b37a, #be8346);
+      border: 0.5vmin solid #9c6a35;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cbox .lidicon span {
+      background: white; border-radius: 1vmin; padding: 0 1.2vmin;
+      font-size: 7vmin; line-height: 1.1; color: #37b3e3;
+      -webkit-text-stroke: 0.25vmin rgba(0,0,0,0.4);
+    }
+    .cbox .tower { --b: 5vmin; transform: translateY(-4vmin) rotate(-12deg); }
+
     /* Find Me icon: three numeral chips, one found. */
     .chips { display: flex; gap: 1.6vmin; align-items: center; }
     .chip {
@@ -262,6 +277,17 @@
       </div>
       <div class="label">Add Up</div>
     </a>
+    <a class="tile" href="count-on/index.html">
+      <div class="picture">
+        <div class="cbox">
+          <div class="lidicon"><span>5</span></div>
+          <div class="tower"><div class="col">
+            <div class="block" style="--c:#e4322b"><div class="face"><div class="eye left"><div class="pupil"></div></div><div class="eye right"><div class="pupil"></div></div><div class="mouth"></div></div></div>
+          </div></div>
+        </div>
+      </div>
+      <div class="label">Count On</div>
+    </a>
   </div>
 
   <div class="parent" id="parent">
@@ -299,6 +325,15 @@
         <button class="band" data-level="2">to 20</button>
         <button class="band" data-level="3">numbers only</button>
         <button class="band" data-level="4">take away</button>
+      </div>
+    </div>
+    <div class="row band-row">
+      <span class="dim-label">Count On</span>
+      <div class="opts level-opts" data-game="count-on">
+        <button class="band" data-level="1">one more</button>
+        <button class="band" data-level="2">box + 1</button>
+        <button class="band" data-level="3">box + 2 or 3</button>
+        <button class="band" data-level="4">to 13</button>
       </div>
     </div>
     <div class="row voice-row">
