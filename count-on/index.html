@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Count On</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="../shared/blocks.css">
+  <style>
+    /*
+     * Count On: the bridge from "count every block" to adding.
+     * The first number hides in a box with its numeral on the lid, so
+     * counting from one is not an option; she starts at the box's number
+     * and counts the few blocks that come after it.
+     */
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto; /* the stage never grows past the screen, so fitBlocks measures a true height */
+      padding: 2vmin 3vmin 3vmin;
+      min-height: 0;
+    }
+    .stage {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 20vmin 1fr;
+      align-items: center;
+      min-height: 0;
+    }
+    .side { display: flex; flex-direction: column; align-items: center; gap: 4vmin; }
+    .replay {
+      width: 16vmin;
+      height: 16vmin;
+      border-radius: 50%;
+      background: #f5841f;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.08s;
+    }
+    .replay:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+    .replay svg { width: 55%; height: 55%; fill: white; }
+    .replay.pulse { animation: pulse 1.2s ease-in-out infinite; }
+    .helpcount {
+      width: 14vmin;
+      height: 14vmin;
+      border-radius: 50%;
+      background: #37b3e3;
+      color: white;
+      font-size: 5vmin;
+      font-weight: 700;
+      letter-spacing: -0.2vmin;
+      text-shadow: 0 0.3vmin 0 rgba(0,0,0,0.25);
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.6);
+      transition: opacity 0.3s, transform 0.3s, background 0.2s;
+    }
+    .helpcount.show { opacity: 1; pointer-events: auto; transform: scale(1); }
+    .helpcount.show.pulse { animation: pulse 1.2s ease-in-out 2; }
+    .helpcount.counting { background: #4aa84a; }
+
+    /* [box] + [new blocks] = ? */
+    .eq {
+      height: 100%;
+      min-height: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 3vmin;
+      padding-top: 2vmin;
+    }
+    .slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 14vmin;
+    }
+    .slot .tower { border-bottom: 5px solid rgba(0,0,0,0.12); transform-origin: bottom center; }
+    .slot .n {
+      --c: #999;
+      font-size: 10vmin;
+      font-weight: 700;
+      line-height: 1;
+      margin-top: 1.2vmin;
+      color: var(--c);
+      -webkit-text-stroke: 0.35vmin rgba(0,0,0,0.4);
+    }
+    .gone { visibility: hidden; }
+    .slot.arrive { animation: arrive 0.45s cubic-bezier(.3,1.6,.5,1); }
+
+    /* The box. The tower sits inside it; the lid covers it, with the numeral on the front.
+       Level 1 leaves the lid off, so she can see the number while learning "one more". */
+    .box {
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-width: calc(var(--b) * 2.6);
+      min-height: calc(var(--b) * 2.4);
+      padding: calc(var(--b) * 0.25) calc(var(--b) * 0.15) 0;
+      border-bottom: 5px solid rgba(0,0,0,0.12);
+      border-radius: 2vmin 2vmin 0 0;
+    }
+    .box .tower { border-bottom: none; padding: 0; min-width: 0; }
+    .box .tower.celebrate { animation: wiggle 0.7s ease-in-out; transform-origin: bottom center; }
+    .box .tower.celebrate .mouth { height: 22%; background: var(--ink); }
+    .lid {
+      position: absolute;
+      inset: 0;
+      border-radius: 2vmin 2vmin 0.8vmin 0.8vmin;
+      background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.035) 0 0.5vmin, transparent 0.5vmin 2.2vmin),
+        linear-gradient(170deg, #e7b37a 0%, #d39a5c 55%, #be8346 100%);
+      border: 0.6vmin solid #9c6a35;
+      box-shadow: inset 0 1vmin 0 rgba(255,255,255,0.22), 0 1vmin 2vmin rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      transition: transform 0.35s cubic-bezier(.3,1.3,.5,1), opacity 0.3s;
+    }
+    /* a strip of tape across the top, so it reads as a box and not a sign */
+    .lid::before {
+      content: '';
+      position: absolute;
+      top: -0.6vmin; left: 38%; right: 38%;
+      height: 3vmin;
+      background: rgba(245, 230, 190, 0.85);
+      border-radius: 0 0 0.6vmin 0.6vmin;
+    }
+    .lid .n {
+      --c: #999;
+      font-size: min(18vmin, calc(var(--b) * 1.7));
+      font-weight: 700;
+      line-height: 1;
+      color: var(--c);
+      background: white;
+      border-radius: 2vmin;
+      padding: 0.6vmin 2vmin;
+      -webkit-text-stroke: 0.35vmin rgba(0,0,0,0.4);
+      box-shadow: 0 0.5vmin 0 rgba(0,0,0,0.15);
+    }
+    .box.open .lid { transform: translateY(-75%) rotate(-10deg); opacity: 0; pointer-events: none; }
+    .box.glow .lid, .box.open.glow .tower { box-shadow: 0 0 0 1vmin #fff, 0 0 4vmin 1.4vmin rgba(255, 200, 0, 0.9); }
+    .box.glow .lid { animation: pulse 0.9s ease-in-out infinite; }
+    .box.wobble { animation: wiggle 0.7s ease-in-out; transform-origin: bottom center; }
+    /* numeral under the box, shown only while the lid is off for good (level 1) */
+    #boxSlot .n.under { visibility: hidden; }
+    .eq.see #boxSlot .n.under { visibility: visible; }
+
+    .op {
+      align-self: center;
+      font-size: 12vmin;
+      font-weight: 700;
+      color: #9a9a9a;
+      line-height: 1;
+      transition: opacity 0.3s;
+    }
+    .answer {
+      align-self: center;
+      width: 20vmin;
+      height: 20vmin;
+      border-radius: 4vmin;
+      border: 1vmin dashed rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13vmin;
+      font-weight: 700;
+      color: #b5b5b5;
+    }
+    .answer.solved {
+      --c: #999;
+      border-style: solid;
+      border-color: var(--c);
+      background: white;
+      color: var(--c);
+      -webkit-text-stroke: 0.35vmin rgba(0,0,0,0.4);
+      animation: found 0.55s cubic-bezier(.3,1.6,.5,1);
+    }
+
+    /* ---------- Answer tiles ---------- */
+    .tiles { display: flex; gap: 3vmin; justify-content: center; padding-top: 2vmin; }
+    .tile {
+      --c: #999;
+      width: 19vmin;
+      height: 19vmin;
+      border-radius: 3.5vmin;
+      background: var(--c);
+      border: 1vmin solid transparent;
+      color: white;
+      font-size: 12vmin;
+      font-weight: 700;
+      line-height: 1;
+      text-shadow: 0 0.5vmin 0 rgba(0,0,0,0.3);
+      box-shadow: 0 1vmin 0 rgba(0,0,0,0.18), 0 1.2vmin 2.4vmin rgba(0,0,0,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.12s, opacity 0.4s, box-shadow 0.12s;
+    }
+    .tile:active { transform: translateY(0.6vmin); box-shadow: 0 0.4vmin 0 rgba(0,0,0,0.18); }
+    .tile.light { color: #333; text-shadow: 0 0.3vmin 0 rgba(255,255,255,0.6); }
+    .tile.teen { background: #f7f7f7; }
+    .tile.rainbow { background: linear-gradient(135deg,#e4322b,#f5841f,#f9d71c,#4aa84a,#37b3e3,#5c3ba6,#9b4dcf); }
+    .tile.wrong { animation: shake 0.45s ease-in-out; }
+    .tile.dim { opacity: 0.25; pointer-events: none; }
+    .tile.right { animation: found 0.55s cubic-bezier(.3,1.6,.5,1) forwards; pointer-events: none; }
+    .tiles.locked .tile { pointer-events: none; }
+    .tiles.waiting .tile { opacity: 0.5; }
+
+    /* ---------- End-of-set overlay ---------- */
+    .party {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6vmin;
+      z-index: 20;
+    }
+    .party.show { display: flex; }
+    .party .lineup {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5vmin;
+      border-bottom: 6px solid rgba(0,0,0,0.12);
+      padding: 0 4vmin;
+      max-width: 94vw;
+    }
+    .party .lineup .tower { animation: hop 0.9s ease-in-out infinite; transform-origin: bottom center; }
+    .play {
+      width: 22vmin;
+      height: 22vmin;
+      border-radius: 50%;
+      background: #4aa84a;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .play::after {
+      content: '';
+      position: absolute;
+      left: 56%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-left: 9vmin solid white;
+      border-top: 6vmin solid transparent;
+      border-bottom: 6vmin solid transparent;
+    }
+
+    @keyframes found {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.2) rotate(-3deg); }
+      70%  { transform: scale(1.05) rotate(2deg); }
+      100% { transform: scale(1.08) rotate(0); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-2vmin) rotate(-3deg); }
+      40% { transform: translateX(2vmin) rotate(3deg); }
+      60% { transform: translateX(-1.5vmin) rotate(-2deg); }
+      80% { transform: translateX(1.5vmin) rotate(2deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(0); }
+      20% { transform: rotate(-4deg) translateY(-6px); }
+      40% { transform: rotate(4deg) translateY(-10px); }
+      60% { transform: rotate(-3deg) translateY(-6px); }
+      80% { transform: rotate(3deg) translateY(-2px); }
+    }
+    @keyframes hop {
+      0%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-2vmin) scaleY(1.05); }
+      50% { transform: translateY(0) scaleY(0.95); }
+    }
+    @keyframes arrive {
+      0%   { transform: translateY(-6vmin) scale(0.4); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    @media (orientation: portrait) {
+      .stage { grid-template-columns: 1fr; grid-template-rows: auto 1fr; justify-items: center; }
+      .tiles { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <a class="corner-btn home" href="../index.html" aria-label="Home">&#8962;</a>
+  <button class="corner-btn fullscreen" id="fsBtn" aria-label="Fullscreen">&#x26F6;</button>
+
+  <div class="app">
+    <div class="stage">
+      <div class="side">
+        <button class="replay" id="replayBtn" aria-label="Say it again">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
+          </svg>
+        </button>
+        <button class="helpcount" id="helpBtn" aria-label="Count on with me">123</button>
+      </div>
+      <div class="eq" id="eq">
+        <div class="slot" id="boxSlot">
+          <div class="box" id="box">
+            <div class="tower" id="towerA"></div>
+            <div class="lid" id="lid"><div class="n" id="lidN"></div></div>
+          </div>
+          <div class="n under" id="nA"></div>
+        </div>
+        <div class="op" id="op">+</div>
+        <div class="slot" id="slotB"><div class="tower" id="towerB"></div><div class="n" id="nB"></div></div>
+        <div class="op" id="eqSign">=</div>
+        <div class="answer" id="answer">?</div>
+      </div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+
+  <div class="party" id="party">
+    <div class="lineup" id="lineup"></div>
+    <button class="play" id="playBtn" aria-label="Play"></button>
+  </div>
+
+  <script src="../shared/blocks.js"></script>
+  <script src="../shared/audio.js"></script>
+  <script src="../shared/progress.js"></script>
+  <script src="../shared/tap.js"></script>
+  <script src="../shared/fx.js"></script>
+  <script src="../shared/count.js"></script>
+  <script src="../shared/gate.js"></script>
+  <script>
+    (function () {
+      const GAME = 'count-on';
+      const MAX_LEVEL = 4;
+      const CLEAN_ROUNDS_TO_ADVANCE = 5;
+      const ROUNDS_PER_SET = 5;
+      const IDLE_HELP_MS = 20000;
+      const IDLE_REPEAT_MS = 25000;
+      const PEEK_MS = 1600;
+      const SLOW = 0.7; // the box number is said slowly: "fiiive... six, seven"
+      const CHEERS = ['Yes!', 'Hooray!', "That's it!", 'Wow!', 'Super!', 'You got it!'];
+
+      const $ = id => document.getElementById(id);
+      const eqEl = $('eq'), boxEl = $('box'), towerA = $('towerA'), towerB = $('towerB');
+      const nA = $('nA'), nB = $('nB'), lidN = $('lidN');
+      const slotB = $('slotB'), opEl = $('op'), answerEl = $('answer');
+      const tilesEl = $('tiles'), replayBtn = $('replayBtn'), helpBtn = $('helpBtn');
+      const partyEl = $('party'), lineupEl = $('lineup'), playBtn = $('playBtn');
+      const params = new URLSearchParams(location.search);
+      // Dev conveniences: ?level=3 forces a level; ?demo=fresh|hint|done|party freezes a state.
+      const demo = params.get('demo');
+      const forcedLevel = parseInt(params.get('level'), 10);
+
+      // Levels: 1 one more, box open (see it)      2 one more, box closed
+      //         3 two or three more, totals to 10   4 one to three more, from 5-10, totals to 13
+      let level = 1;
+      let a = 0, k = 0, answer = 0;   // a in the box, k more come, answer = a + k
+      let lastKey = '';
+      let locked = true;
+      let busy = false;               // the box is being peeked into or filled
+      let wrongTaps = 0;
+      let roundsDone = 0;
+      let solved = [];
+      let runId = 0;
+      let promptId = 0;
+      let idleTimer = null;
+      let idleRepeats = 0;
+      let countId = 0;
+      let peekTimer = null;
+
+      const W = n => Blocks.WORDS[n];
+      const open = () => level === 1;
+      const moreWord = () => k === 1 ? 'one more' : W(k) + ' more';
+
+      // ---- Problems ----
+      function problemPool(lvl) {
+        const pool = [];
+        if (lvl === 1) for (let x = 1; x <= 9; x++) pool.push(x + '+1');
+        else if (lvl === 2) for (let x = 2; x <= 9; x++) pool.push(x + '+1');
+        else if (lvl === 3) for (let x = 2; x <= 8; x++) for (let y = 2; y <= 3 && x + y <= 10; y++) pool.push(x + '+' + y);
+        else for (let x = 5; x <= 10; x++) for (let y = 1; y <= 3; y++) pool.push(x + '+' + y);
+        return pool;
+      }
+
+      function planRound() {
+        level = Number.isFinite(forcedLevel) ? forcedLevel : Progress.getLevel(GAME);
+        level = Math.max(1, Math.min(MAX_LEVEL, level));
+        const key = Progress.pickTarget(problemPool(level), lastKey, () => 1);
+        lastKey = key;
+        [a, k] = key.split('+').map(Number);
+        answer = a + k;
+      }
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      // The two slips worth catching: the box number (forgot to count on) and
+      // the new blocks alone (forgot the box). Then a neighbour of the answer.
+      function pickChoices() {
+        const top = level === 4 ? 13 : 10;
+        const want = level <= 2 ? 2 : 3;   // three tiles while learning "one more", four after
+        const ok = n => n >= 1 && n <= top && n !== answer;
+        const picks = new Set();
+        if (ok(a)) picks.add(a);
+        if (level >= 3 && ok(k) && k !== a) picks.add(k);
+        shuffle([answer + 1, answer - 1, answer + 2]).forEach(n => { if (picks.size < want && ok(n)) picks.add(n); });
+        for (let i = 1; picks.size < want && i <= top; i++) if (ok(i)) picks.add(i);
+        return shuffle([answer, ...Array.from(picks).slice(0, want)]);
+      }
+
+      // ---- Speech ----
+      function questionText() {
+        return open()
+          ? W(a) + ' and one more. How many now?'
+          : W(a) + ' in the box, and ' + moreWord() + '. How many now?';
+      }
+
+      function prompt(prefix, text) {
+        const id = ++promptId;
+        replayBtn.classList.add('pulse');
+        GameAudio.say((prefix || '') + (text || questionText()), {
+          onEnd: () => { if (id === promptId) replayBtn.classList.remove('pulse'); }
+        });
+        armIdle();
+      }
+
+      function armIdle() {
+        clearTimeout(idleTimer);
+        if (locked || idleRepeats >= 2) return;
+        idleTimer = setTimeout(() => {
+          if (locked || counting() || busy) return;
+          idleRepeats++;
+          if (idleRepeats === 1) { showHelp(); armIdle(); }
+          else prompt();
+        }, idleRepeats === 0 ? IDLE_HELP_MS : IDLE_REPEAT_MS);
+      }
+
+      // ---- Count on with me (only when she asks) ----
+      // Models the move itself: say the box number slowly, then count only the new blocks.
+      function showHelp() {
+        if (helpBtn.classList.contains('show')) return;
+        helpBtn.classList.add('show', 'pulse');
+        setTimeout(() => helpBtn.classList.remove('pulse'), 2600);
+      }
+
+      function counting() { return helpBtn.classList.contains('counting'); }
+
+      function stopCount() {
+        countId++;
+        helpBtn.classList.remove('counting');
+        boxEl.classList.remove('glow');
+        document.querySelectorAll('.block.lit').forEach(b => b.classList.remove('lit'));
+      }
+
+      function countWithMe() {
+        if (locked || busy) return;
+        stopCount();
+        clearTimeout(idleTimer);
+        promptId++;
+        replayBtn.classList.remove('pulse');
+        const id = countId, run = runId;
+        const alive = () => id === countId && run === runId;
+        helpBtn.classList.add('counting');
+        boxEl.classList.add('glow');
+        // The tiles stay live: a tap at any point stops the counting and counts as her answer.
+        GameAudio.say(W(a) + '...', {
+          rate: SLOW,
+          onDone: () => {
+            if (!alive()) return;
+            boxEl.classList.remove('glow');
+            Count.along(towerB.querySelectorAll('.block'), {
+              from: a + 1,
+              alive,
+              onDone: () => {
+                helpBtn.classList.remove('counting');
+                prompt('', 'Find ' + W(answer) + '!');
+              }
+            });
+          }
+        });
+      }
+
+      // ---- Peek: tap the box to check what's inside ----
+      // It says the number, nothing more, so peeking builds trust in the lid
+      // without turning into counting from one.
+      function peek() {
+        if (open() || locked || busy || boxEl.classList.contains('open')) return;
+        stopCount();
+        clearTimeout(idleTimer);
+        promptId++;
+        replayBtn.classList.remove('pulse');
+        const run = runId;
+        boxEl.classList.add('open');
+        GameAudio.say(W(a) + '!');
+        clearTimeout(peekTimer);
+        peekTimer = setTimeout(() => {
+          if (run !== runId) return;
+          boxEl.classList.remove('open');
+          armIdle();
+        }, PEEK_MS);
+      }
+
+      // ---- Drawing ----
+      function colorOf(n) {
+        return n === 10 ? '#8c8c8c' : n > 10 ? Blocks.onesColor(n) || '#8c8c8c' : Blocks.numberColor(n);
+      }
+      function setNumeral(el, n) {
+        el.textContent = n;
+        el.style.setProperty('--c', colorOf(n));
+      }
+
+      // One block size for the whole round, so nothing jumps as the box fills.
+      function fitBlocks() {
+        const tallest = Math.min(answer, 10);
+        const room = eqEl.clientHeight - nB.offsetHeight - 50;
+        const width = eqEl.clientWidth / 10;
+        const size = Math.max(14, Math.min(room / (tallest + 1.3), width, 64));
+        eqEl.style.setProperty('--b', size + 'px');
+      }
+
+      // The new blocks share one colour (the colour of k), so they read as
+      // separate arrivals to count, not as a number that changes as they leave.
+      function renderLoose(n) {
+        towerB.innerHTML = '';
+        const col = document.createElement('div');
+        col.className = 'col';
+        const c = Blocks.numberColor(k);
+        for (let i = 0; i < n; i++) {
+          const block = document.createElement('div');
+          block.className = 'block';
+          block.style.setProperty('--c', c);
+          if (Blocks.isLight(c)) block.classList.add('light');
+          col.appendChild(block);
+        }
+        towerB.appendChild(col);
+      }
+
+      function styleTile(tile, n) {
+        tile.className = 'tile';
+        if (n === 7) tile.classList.add('rainbow');
+        else if (n > 10) {
+          tile.classList.add('teen', 'light');
+          tile.style.borderColor = n === 20 ? '#8c8c8c' : Blocks.numberColor(n - 10);
+        } else {
+          const c = Blocks.numberColor(n);
+          tile.style.setProperty('--c', c);
+          if (Blocks.isLight(c)) tile.classList.add('light');
+        }
+      }
+
+      function renderTiles() {
+        tilesEl.innerHTML = '';
+        pickChoices().forEach(n => {
+          const tile = document.createElement('button');
+          styleTile(tile, n);
+          tile.textContent = n;
+          tile.dataset.n = n;
+          Tap.on(tile, () => { GameAudio.unlock(); onTap(tile, n); });
+          tilesEl.appendChild(tile);
+        });
+      }
+
+      function lockTiles(on) {
+        locked = on;
+        tilesEl.classList.toggle('locked', on);
+      }
+
+      // ---- Round flow ----
+      // "Five in the box." -> the new blocks arrive -> "and two more. How many now?"
+      function newRound(prefix) {
+        const run = ++runId;
+        planRound();
+        wrongTaps = 0;
+        idleRepeats = 0;
+        busy = false;
+        clearTimeout(idleTimer);
+        clearTimeout(peekTimer);
+        stopCount();
+        helpBtn.classList.remove('show', 'pulse');
+
+        eqEl.classList.toggle('see', open());
+        boxEl.classList.toggle('open', open());
+        [slotB, opEl].forEach(el => el.classList.remove('gone'));
+        slotB.classList.add('gone');
+        slotB.classList.remove('arrive');
+        answerEl.className = 'answer';
+        answerEl.textContent = '?';
+        setNumeral(lidN, a);
+        setNumeral(nA, a);
+        setNumeral(nB, k);
+        renderTiles();                        // first, so fitBlocks measures the stage with the tiles in place
+        fitBlocks();
+        Blocks.render(towerA, a);
+        renderLoose(k);
+        lockTiles(true);
+        tilesEl.classList.add('waiting');
+
+        boxEl.classList.remove('wobble');
+        void boxEl.offsetWidth;
+        boxEl.classList.add('wobble');
+        const intro = open() ? 'This is ' + W(a) + '.' : W(a) + ' in the box.';
+        GameAudio.say((prefix || '') + intro, {
+          onDone: () => {
+            if (run !== runId) return;
+            slotB.classList.remove('gone');
+            slotB.classList.add('arrive');
+            GameAudio.pop(k);
+            setTimeout(() => {
+              if (run !== runId) return;
+              tilesEl.classList.remove('waiting');
+              lockTiles(false);
+              prompt('', 'And ' + moreWord() + '! How many now?');
+            }, 450);
+          }
+        });
+      }
+
+      // ---- Answers ----
+      function onTap(tile, n) {
+        if (locked) return;
+        clearTimeout(idleTimer);
+        stopCount();
+        if (busy) { clearTimeout(peekTimer); busy = false; }
+        if (!open()) boxEl.classList.remove('open');
+
+        if (n === answer) {
+          lockTiles(true);
+          const run = ++runId;
+          promptId++;
+          replayBtn.classList.remove('pulse');
+          tile.classList.add('right');
+          tilesEl.querySelectorAll('.tile').forEach(t => { if (t !== tile) t.classList.add('dim'); });
+          Progress.recordLevelRound(GAME, wrongTaps === 0, CLEAN_ROUNDS_TO_ADVANCE, MAX_LEVEL);
+          solved.push(answer);
+          fill(run);
+          return;
+        }
+
+        wrongTaps++;
+        tile.classList.remove('wrong');
+        void tile.offsetWidth;
+        tile.classList.add('wrong');
+        const fadeRun = runId;
+        setTimeout(() => { if (fadeRun === runId) tile.classList.add('dim'); }, 450);
+        GameAudio.nope();
+        showHelp();
+
+        // Name the slip, so the next try has somewhere to start.
+        if (n === a) prompt(open() ? "That's " + W(a) + '. One more comes! ' : "That's the box. Now count on! ", ' ');
+        else if (n === k && level >= 3) prompt("That's just the new ones. Start with the box! ", ' ');
+        else prompt("That's " + W(n) + '. ');
+      }
+
+      // The payoff, every time: "fiiive... six, seven!" as each new block hops into the box.
+      function fill(run) {
+        busy = true;
+        boxEl.classList.add('glow');
+        GameAudio.say(W(a) + '...', {
+          rate: SLOW,
+          onDone: () => { if (run !== runId) return; boxEl.classList.remove('glow'); hopNext(run, 1); }
+        });
+      }
+
+      function hopNext(run, i) {
+        if (run !== runId) return;
+        if (i > k) { setTimeout(() => { if (run === runId) reveal(run); }, 250); return; }
+        const blocks = towerB.querySelectorAll('.block');
+        const top = blocks[blocks.length - 1];
+        const rb = top.getBoundingClientRect();
+        const ra = (open() ? towerA : boxEl).getBoundingClientRect();
+        const dx = (ra.left + ra.width / 2) - (rb.left + rb.width / 2);
+        const dy = (open() ? ra.top - rb.height / 2 : ra.top + ra.height / 2) - (rb.top + rb.height / 2);
+        const hop = top.animate([
+          { transform: 'translate(0, 0) scale(1)' },
+          { transform: 'translate(' + dx * 0.5 + 'px, ' + (Math.min(dy, 0) - rb.height * 2) + 'px) scale(1)', offset: 0.55 },
+          { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(' + (open() ? 1 : 0.5) + ')' }
+        ], { duration: 420, easing: 'ease-in-out', fill: 'forwards' });
+        let landed = false;
+        const land = () => {
+          if (landed || run !== runId) return;
+          landed = true;
+          renderLoose(k - i);
+          if (k - i === 0) opEl.classList.add('gone');
+          Blocks.render(towerA, a + i, { pop: a + i - 1 });
+          setNumeral(lidN, a + i);
+          setNumeral(nA, a + i);
+          if (!open()) { boxEl.classList.remove('wobble'); void boxEl.offsetWidth; boxEl.classList.add('wobble'); }
+          GameAudio.pop(a + i);
+          GameAudio.say(W(a + i), { onDone: () => setTimeout(() => hopNext(run, i + 1), 150) });
+        };
+        hop.onfinish = land;
+        setTimeout(land, 480);
+      }
+
+      // Open the box: it really is the whole number now.
+      function reveal(run) {
+        slotB.classList.add('gone');
+        boxEl.classList.add('open');
+        eqEl.classList.add('see');
+        towerA.classList.remove('celebrate');
+        void towerA.offsetWidth;
+        towerA.classList.add('celebrate');
+        setTimeout(() => towerA.classList.remove('celebrate'), 800);
+        answerEl.className = 'answer solved';
+        answerEl.textContent = answer;
+        answerEl.style.setProperty('--c', colorOf(answer));
+        GameAudio.chime();
+        FX.burstFrom(towerA, { spread: 260 });
+        const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+        GameAudio.say(cheer + ' ' + W(a) + ' and ' + moreWord() + ' make ' + Blocks.phrase(answer), {
+          onDone: () => setTimeout(() => { if (run === runId) nextRound(); }, 800)
+        });
+      }
+
+      function nextRound() {
+        if (demo) return;
+        roundsDone++;
+        if (roundsDone >= ROUNDS_PER_SET) { endSet(); return; }
+        newRound();
+      }
+
+      // ---- End of set ----
+      function lineup(numbers) {
+        lineupEl.innerHTML = '';
+        const cols = numbers.reduce((s, n) => s + Blocks.columns(n).length, 0);
+        const size = Math.max(1.5, Math.min(3.2, 70 / (Math.max(cols, 1) * 1.45)));
+        numbers.forEach((n, i) => {
+          const t = document.createElement('div');
+          t.className = 'tower';
+          t.style.setProperty('--b', size + 'vmin');
+          t.style.animationDelay = (i * 0.12) + 's';
+          Blocks.render(t, n);
+          lineupEl.appendChild(t);
+        });
+      }
+
+      function endSet() {
+        lockTiles(true);
+        clearTimeout(idleTimer);
+        const up = Progress.takeLevelUp(GAME);
+        lineup(solved);
+        partyEl.classList.add('show');
+        GameAudio.chime();
+        setTimeout(() => GameAudio.chime(), 350);
+        const cx = window.innerWidth / 2, cy = window.innerHeight * 0.38;
+        FX.burst(cx - window.innerWidth * 0.18, cy, { count: 40, spread: 320 });
+        setTimeout(() => FX.burst(cx + window.innerWidth * 0.18, cy, { count: 40, spread: 320 }), 300);
+        setTimeout(() => FX.burst(cx, cy - 40, { count: 50, spread: 400 }), 700);
+        const next = {
+          2: 'Next time, the blocks hide in a box!',
+          3: 'Next time, more blocks come!',
+          4: 'Next time, bigger numbers!'
+        }[up];
+        GameAudio.say('You did them all!' + (next ? ' ' + next : ''));
+      }
+
+      function startSet(prefix) {
+        partyEl.classList.remove('show');
+        roundsDone = 0;
+        solved = [];
+        newRound(prefix);
+      }
+
+      // ---- Wire up ----
+      const HELLO = "Let's count on! ";
+      Tap.on(playBtn, () => { GameAudio.unlock(); startSet(''); });
+      Tap.on(replayBtn, () => {
+        if (locked || busy) return;
+        GameAudio.unlock();
+        stopCount();
+        prompt();
+      });
+      Tap.on(helpBtn, () => { GameAudio.unlock(); countWithMe(); });
+      Tap.on(boxEl, () => { GameAudio.unlock(); peek(); });
+      $('fsBtn').addEventListener('click', () => {
+        const el = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      });
+      window.addEventListener('resize', () => { if (a) fitBlocks(); });
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.fonts && document.fonts.ready.then(() => { if (a) fitBlocks(); });
+
+      GameAudio.ready(() => {
+        if (!demo) { startSet(HELLO); return; }
+        startSet('');
+        const whenLive = fn => { const t = setInterval(() => { if (!locked) { clearInterval(t); fn(); } }, 100); };
+        if (demo === 'hint') {
+          whenLive(() => {
+            const wrong = tilesEl.querySelector('[data-n="' + a + '"]') ||
+              Array.from(tilesEl.querySelectorAll('.tile')).find(t => Number(t.dataset.n) !== answer);
+            if (wrong) onTap(wrong, Number(wrong.dataset.n));
+          });
+        } else if (demo === 'done') {
+          whenLive(() => { const right = tilesEl.querySelector('[data-n="' + answer + '"]'); if (right) onTap(right, answer); });
+        } else if (demo === 'party') {
+          solved = [6, 8, 10, 4, 12];
+          endSet();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

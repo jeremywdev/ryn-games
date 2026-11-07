@@ -24,6 +24,7 @@ Tap the corner button on any game to go fullscreen. The house button goes home.
 | Find Me | hear a number, or count a tower, and tap the numeral; adapts to the numbers she misses | playable |
 | Make Me | build a target from smaller numbers (number bonds), counting on aloud; four levels up to teens | playable |
 | Add Up | first addition and take-away: two towers merge into one, then numbers only, then take away | playable |
+| Count On | counting on from a number she can't see: the first number hides in a box, she counts only the new blocks | playable |
 | Who's Taller | comparing | planned |
 | Number Hop | number line, skip counting | planned |
 | Blast Off | arcade sums (Math Blaster homage) | planned |
@@ -43,6 +44,7 @@ Tap the corner button on any game to go fullscreen. The house button goes home.
 - `block-buddy/` — the sandbox: plus, minus, and a 1 to 20 keypad that builds the number while counting aloud.
 - `make-me/` — a target outline and a row of small towers; she taps parts into the outline while the voice counts on, and the parts become the whole number. Levels: make 2-5, make 6-10, make ten from a start, make a teen from ten. Five clean rounds advance a level.
 - `add-up/` — "three and four make how many?" She taps the answer and the second tower hops onto the first, becoming one number. Levels: totals to 10 with blocks, totals 11-20, numbers only (blocks appear after a miss), and take away (blocks pop off, how many are left). After a miss, or 20 quiet seconds, a "123" button appears; tapping it lights and counts the blocks aloud. Counting never starts on its own, and the answer tiles stay tappable while it counts. Five clean rounds advance a level.
+- `count-on/` — the bridge from counting every block to adding. The first number goes into a box with its numeral on the lid, so counting from one isn't possible; one to three new blocks arrive and she taps how many there are now. When she's right, the voice says the box number slowly and counts only the new blocks as each one hops in ("fiiive... six, seven"), then the lid opens on the whole number. Levels: one more with the box open, one more with it closed, two or three more (totals to 10), and from 5-10 with one to three more (totals to 13). Tapping the box peeks inside and just says its number. The opt-in "123" button models counting on, never counting all. Wrong answers name the slip: the box number ("now count on") or only the new blocks ("start with the box"). Five clean rounds advance a level.
 - `find-me/` — levels: hear it (the voice says a number), see blocks (a tower is shown and no number is spoken), or both mixed. See-blocks rounds use the same opt-in "123" counting button. Eight clean rounds advance a level. She taps the answer among three or four. A wrong tile fades out; after a second miss the target's blocks appear as a hint and the right tile bobs. Six rounds per set, then a celebration, with a bigger one when the range widens.
 
 ## Grown-up corner
@@ -57,6 +59,7 @@ The same screen has a voice picker. The games default to the most natural voice 
 - `find-me/?demo=right` shows a solved round, `find-me/?demo=hint` a stuck round with the hint, `find-me/?demo=party` the end-of-set screen.
 - `make-me/?level=3` forces a level; `make-me/?demo=mid|done|party` freezes a state.
 - `find-me/?level=2` forces the see-blocks level.
+- `count-on/?level=3` forces a level; `count-on/?demo=fresh|hint|done|party` freezes a state.
 - `add-up/?level=4` forces a level; `add-up/?demo=fresh|hint|done|party` freezes a state.
 
 ## Design rules
